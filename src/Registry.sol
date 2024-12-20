@@ -17,6 +17,20 @@ contract Registry is IRegistry {
     uint256 public constant MIN_UNREGISTRATION_DELAY = 64; // Two epochs
     uint256 public constant FRAUD_PROOF_WINDOW = 7200; // 1 day
     bytes public constant DOMAIN_SEPARATOR = "0x00435255"; // "URC" in little endian
+    uint256 public ETH2_GENESIS_TIMESTAMP;
+
+    constructor() {
+        if (block.chainid == 17000) {
+            // Holesky
+            ETH2_GENESIS_TIMESTAMP = 1695902400;
+        } else if (block.chainid == 1) {
+            // Mainnet
+            ETH2_GENESIS_TIMESTAMP = 1606824023;
+        } else if (block.chainid == 7014190335) {
+            // Helder
+            ETH2_GENESIS_TIMESTAMP = 1718967660;
+        }
+    }
 
     function register(Registration[] calldata regs, address withdrawalAddress, uint16 unregistrationDelay)
         external
@@ -187,7 +201,7 @@ contract Registry is IRegistry {
         // Distribute slashed funds
         _distributeSlashedFunds(operatorWithdrawalAddress, collateralGwei, slashAmountGwei);
 
-        emit OperatorSlashed(registrationRoot, slashAmountGwei, signedDelegation.delegation.validatorPubKey);
+        emit OperatorSlashed(registrationRoot, slashAmountGwei, signedDelegation.delegation.proposerPubKey);
     }
 
     function addCollateral(bytes32 registrationRoot) external payable {
@@ -237,7 +251,7 @@ contract Registry is IRegistry {
         ISlasher.SignedDelegation calldata signedDelegation
     ) internal view returns (uint256 collateralGwei) {
         // Reconstruct Leaf using pubkey in SignedDelegation to check equivalence
-        bytes32 leaf = keccak256(abi.encode(signedDelegation.delegation.validatorPubKey, registrationSignature));
+        bytes32 leaf = keccak256(abi.encode(signedDelegation.delegation.proposerPubKey, registrationSignature));
 
         collateralGwei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
 
@@ -248,13 +262,16 @@ contract Registry is IRegistry {
         // Reconstruct Delegation message
         bytes memory message = abi.encode(signedDelegation.delegation);
 
+        // Check if the delegation is fresh
+        if (signedDelegation.delegation.validUntil < _getSlotFromTimestamp(block.timestamp)) {
+            revert DelegationExpired();
+        }
+
         // Recover Slasher contract domain separator
         bytes memory domainSeparator = ISlasher(signedDelegation.delegation.slasher).DOMAIN_SEPARATOR();
 
         if (
-            !BLS.verify(
-                message, signedDelegation.signature, signedDelegation.delegation.validatorPubKey, domainSeparator
-            )
+            !BLS.verify(message, signedDelegation.signature, signedDelegation.delegation.proposerPubKey, domainSeparator)
         ) {
             revert DelegationSignatureInvalid();
         }
@@ -290,5 +307,12 @@ contract Registry is IRegistry {
         if (!success) {
             revert EthTransferFailed();
         }
+    }
+
+    /// @notice Get the slot number from a given timestamp. Assumes 12 second slot time.
+    /// @param _timestamp The timestamp
+    /// @return The slot number
+    function _getSlotFromTimestamp(uint256 _timestamp) public view returns (uint256) {
+        return (_timestamp - ETH2_GENESIS_TIMESTAMP) / 12;
     }
 }

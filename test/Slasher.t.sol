@@ -45,13 +45,14 @@ contract DummySlasherTest is UnitTestHelper {
         dummySlasher = new DummySlasher(slashAmountGwei);
 
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
-            validatorSecretKey: SECRET_KEY_1,
+            proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
             withdrawalAddress: alice,
             delegateSecretKey: SECRET_KEY_2,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
-            metadata: ""
+            metadata: "",
+            validUntil: uint64(UINT256_MAX)
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
@@ -73,7 +74,7 @@ contract DummySlasherTest is UnitTestHelper {
         vm.prank(bob);
         vm.expectEmit(address(registry));
         emit IRegistry.OperatorSlashed(
-            result.registrationRoot, slashAmountGwei, result.signedDelegation.delegation.validatorPubKey
+            result.registrationRoot, slashAmountGwei, result.signedDelegation.delegation.proposerPubKey
         );
         uint256 gotSlashAmountGwei = registry.slashCommitment(
             result.registrationRoot,
@@ -99,13 +100,14 @@ contract DummySlasherTest is UnitTestHelper {
         dummySlasher = new DummySlasher(slashAmountGwei);
 
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
-            validatorSecretKey: SECRET_KEY_1,
+            proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
             withdrawalAddress: alice,
             delegateSecretKey: SECRET_KEY_2,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
-            metadata: ""
+            metadata: "",
+            validUntil: uint64(UINT256_MAX)
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
@@ -132,13 +134,14 @@ contract DummySlasherTest is UnitTestHelper {
         dummySlasher = new DummySlasher(slashAmountGwei);
 
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
-            validatorSecretKey: SECRET_KEY_1,
+            proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
             withdrawalAddress: alice,
             delegateSecretKey: SECRET_KEY_2,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
-            metadata: ""
+            metadata: "",
+            validUntil: uint64(UINT256_MAX)
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
@@ -160,13 +163,14 @@ contract DummySlasherTest is UnitTestHelper {
         dummySlasher = new DummySlasher(slashAmountGwei);
 
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
-            validatorSecretKey: SECRET_KEY_1,
+            proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
             withdrawalAddress: alice,
             delegateSecretKey: SECRET_KEY_2,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
-            metadata: ""
+            metadata: "",
+            validUntil: uint64(UINT256_MAX)
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
@@ -197,13 +201,14 @@ contract DummySlasherTest is UnitTestHelper {
         dummySlasher = new DummySlasher(0);
 
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
-            validatorSecretKey: SECRET_KEY_1,
+            proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
             withdrawalAddress: alice,
             delegateSecretKey: SECRET_KEY_2,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
-            metadata: ""
+            metadata: "",
+            validUntil: uint64(UINT256_MAX)
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
@@ -231,13 +236,14 @@ contract DummySlasherTest is UnitTestHelper {
         dummySlasher = new DummySlasher(excessiveSlashAmount);
 
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
-            validatorSecretKey: SECRET_KEY_1,
+            proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
             withdrawalAddress: alice,
             delegateSecretKey: SECRET_KEY_2,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
-            metadata: ""
+            metadata: "",
+            validUntil: uint64(UINT256_MAX)
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
@@ -267,13 +273,14 @@ contract DummySlasherTest is UnitTestHelper {
         RejectEther rejectEther = new RejectEther();
 
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
-            validatorSecretKey: SECRET_KEY_1,
+            proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
             withdrawalAddress: address(rejectEther),
             delegateSecretKey: SECRET_KEY_2,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
-            metadata: ""
+            metadata: "",
+            validUntil: uint64(UINT256_MAX)
         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
@@ -285,6 +292,43 @@ contract DummySlasherTest is UnitTestHelper {
         vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
 
         vm.expectRevert(IRegistry.EthTransferFailed.selector);
+        registry.slashCommitment(
+            result.registrationRoot,
+            result.registrations[leafIndex].signature,
+            proof,
+            leafIndex,
+            result.signedDelegation,
+            ""
+        );
+    }
+
+    function testRevertDelegationExpired() public {
+        uint256 slashAmountGwei = 42;
+        dummySlasher = new DummySlasher(slashAmountGwei);
+
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            withdrawalAddress: alice,
+            delegateSecretKey: SECRET_KEY_2,
+            slasher: address(dummySlasher),
+            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
+            metadata: "",
+            // validUntil: uint64(block.timestamp - 1) // Delegation expired
+            validUntil: 0
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
+        vm.warp(block.number * 12);
+
+        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        uint256 leafIndex = 0;
+        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+
+        vm.prank(bob);
+        vm.expectRevert(IRegistry.DelegationExpired.selector);
         registry.slashCommitment(
             result.registrationRoot,
             result.registrations[leafIndex].signature,

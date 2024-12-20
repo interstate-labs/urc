@@ -33,7 +33,7 @@ contract ExclusionPreconfSlasherTest is UnitTestHelper {
     uint256 collateral = 1 ether;
 
     function setUp() public {
-        vm.chainId(1);
+        vm.createSelectFork(vm.rpcUrl("mainnet"));
         slasher = new ExclusionPreconfSlasher(slashAmountGwei);
         registry = new Registry();
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
@@ -106,13 +106,14 @@ contract ExclusionPreconfSlasherTest is UnitTestHelper {
 
         // Register operator to URC
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
-            validatorSecretKey: SECRET_KEY_1,
+            proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
             withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
             slasher: address(slasher),
             domainSeparator: slasher.DOMAIN_SEPARATOR(),
-            metadata: metadata
+            metadata: metadata,
+            validUntil: uint64(UINT256_MAX)
         });
 
         // Register operator to URC and signs delegation message

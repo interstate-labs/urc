@@ -136,13 +136,14 @@ contract UnitTestHelper is Test {
     }
 
     struct RegisterAndDelegateParams {
-        uint256 validatorSecretKey;
+        uint256 proposerSecretKey;
         uint256 collateral;
         address withdrawalAddress;
         uint256 delegateSecretKey;
         address slasher;
         bytes domainSeparator;
         bytes metadata;
+        uint64 validUntil;
     }
 
     struct RegisterAndDelegateResult {
@@ -157,16 +158,17 @@ contract UnitTestHelper is Test {
     {
         // Single registration
         (result.registrationRoot, result.registrations) =
-            basicRegistration(params.validatorSecretKey, params.collateral, params.withdrawalAddress);
+            basicRegistration(params.proposerSecretKey, params.collateral, params.withdrawalAddress);
 
         // Sign delegation
         ISlasher.Delegation memory delegation = ISlasher.Delegation({
-            validatorPubKey: BLS.toPublicKey(params.validatorSecretKey),
+            proposerPubKey: BLS.toPublicKey(params.proposerSecretKey),
             delegatePubKey: BLS.toPublicKey(params.delegateSecretKey),
             slasher: params.slasher,
+            validUntil: params.validUntil,
             metadata: params.metadata
         });
 
-        result.signedDelegation = signDelegation(params.validatorSecretKey, delegation, params.domainSeparator);
+        result.signedDelegation = signDelegation(params.proposerSecretKey, delegation, params.domainSeparator);
     }
 }

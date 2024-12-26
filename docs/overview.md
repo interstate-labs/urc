@@ -4,19 +4,46 @@
 - [X] Batch register an operator (cheaply)
 - [X] Unregister/Claim collateral
 - [X] Slash with bytecode
-- [ ] Slash with arbitrary `Slasher` contracts
+- [X] Slash with arbitrary `Slasher` contracts
 - [ ] Social consensus on design
 - [ ] ERC
 - [ ] Audit
 
-## Schemas
-The message signed by a validator's BLS key and supplied to the URC during registration.
-```
-struct RegistrationMessage {
-    /// Compressed ECDSA key without prefix (optional TBD)
-    bytes32 proxyKey; 
 
-    /// The address used to deregister validators and claim collateral
+## Overview
+```mermaid
+sequenceDiagram
+autonumber
+    participant Operator
+    participant URC
+    participant Protocol
+    participant Challenger
+    participant Slasher
+
+    Operator->>URC: register(...)
+    alt Happy path 
+        Operator->>Protocol: sign Delegation messages
+        Operator->>Protocol: perform commitments
+        Operator->>URC: unregister()
+        Operator->>Operator: wait for unregistrationDelay
+        note over Operator,Protocol: Commitments no longer enforced
+        Operator->>URC: claimCollateral()
+    else Fraudulent Registration
+        Challenger->>URC: slashRegistration(...)
+    else Broken Commitment
+        Operator->>Protocol: sign Delegation messages
+        Operator->>Protocol: break commitment
+        Challenger->>URC: slashCommitment(...)
+        URC->>Slasher: slash(...)
+        Slasher->>URC: slashAmountGwei
+    end
+```
+
+## Schemas
+The message signed by an operator's BLS key and supplied to the URC's `register()` function.
+```Solidity
+struct RegistrationMessage {
+    /// The address used to deregister operator and claim collateral
     address withdrawalAddress; 
 
     /// The number of blocks that must elapse between deregistering and claiming
@@ -24,66 +51,81 @@ struct RegistrationMessage {
 }
 ```
 
-The off-chain commitment message signed by a validator's BLS key (or proxyKey TBD). Should follow the API specs.
+Registration signatures are created as follows:
+```Solidity
+    bytes memory message = abi.encodePacked(withdrawalAddress, unregistrationDelay);
+    
+    BLS.G2Point memory signature = BLS.sign(message, secretKey, registry.DOMAIN_SEPARATOR());
 ```
-struct DelegationMessage {
-    /// Validator's compressed BLS public key
-    bytes validatorPubkey; 
+---
 
-    /// Delegate's compressed BLS public key
-    bytes delegatePubkey; 
-
-    /// Compressed ECDSA key without prefix (optional TBD)
-    bytes32 proxyKey; 
-
-    /// Hash of the slashing bytecode to be executed
-    bytes32 bytecodeHash;
-
-    /// Arbitrary metadata to be included in the delegation (we should include the OperatorCommitment)
-    bytes metadata; 
+`Delegation` messages are off-chain messages defined in the [Constraints API](https://github.com/ethereum-commitments/preconf-specs). The message is signed by a proposer's BLS key to delegate to another party. 
+```Solidity
+struct Delegation {
+    /// The proposer's BLS public key
+    BLS.G1Point proposerPubKey;
+    /// The delegate's BLS public key
+    BLS.G1Point delegatePubKey;
+    /// The address of the slasher contract
+    address slasher;
+    /// The slot number after which the delegation expires
+    uint64 validUntil;
+    /// Arbitrary metadata reserved for use by the Slasher
+    bytes metadata;
 }
 ```
 
+`SignedDelegation` signatures are used to slash a proposer if they break their commitment and are expected to be signed as follows:
+
+```solidity
+struct SignedDelegation {
+    /// The delegation message
+    Delegation delegation;
+    /// The signature of the delegation message
+    BLS.G2Point signature;
+}
+
+bytes memory message = abi.encode(delegation);
+
+bytes memory domainSeparator = ISlasher(delegation.slasher).DOMAIN_SEPARATOR();
+
+BLS.G2Point memory signature = BLS.sign(message, secretKey, domainSeparator);
+```
+
 ## Optimistic Registration Process
-The Optimistic Registration system allows validators to register for proposer commitment services with minimal upfront verification, while maintaining security through a fraud-proof window. We define an `operator` to be an entity who registers one or more validators.
+We define an `operator` to be an entity who registers one or more BLS keys.
+The URC allows operators to optimistically register BLS keys for proposer commitment protocols, while maintaining security through a fraud-proof window.
 
 ### Off-Chain Preparation
-For each validator to register, the operator signs a `RegistrationMessage` with their validator's BLS key. This action binds the validator key to a `proxyKey` (ECDSA) used to sign off-chain proposer commitments. They also select a `withdrawalAddress` that can unregister and claim collateral. The `withdrawalAddress` wallet does not interact with the proposer commitment supply chain and can be in cold storage or a multisig.
+For each key to register, the operator signs a `RegistrationMessage`, which binds them to a `withdrawalAddress` used to unregister and claim collateral, and an `unregistrationDelay` used to enforce a delay before the operator can deregister. The URC does not require the `withdrawalAddress` to interact with the proposer commitment supply chain, and it can be in cold storage or a multisig.
 
 ### register()
 ```solidity
-function register(
-    Registration[] calldata registrations,
-    bytes32 proxyKey,
-    address withdrawalAddress,
-    uint16 unregistrationDelay
-) external payable;
+ function register(
+    Registration[] calldata regs, address withdrawalAddress, uint16 unregistrationDelay)
+        external
+        payable
+        returns (bytes32 registrationRoot);
 ```
 
 ```solidity
 /// Mapping from registration merkle roots to Operator structs
-mapping(bytes32 operatorCommitment => Operator) public commitments;
+mapping(bytes32 operatorCommitment => Operator) public registrations;
 ```
 
-The operator supplies at least `MIN_COLLATERAL` Ether to the contract and batch registers `N` validators. To save gas, the contract will not verify the signatures of the `Registration` messages, nor will it save the validator public keys directly. Instead, the register function will merkleize the inputs to a root hash called the `operatorCommitment` and save this to the `commitments` mapping. An `Operator` is constructed to save the minimal data for the operator's lifecycle, optimized to reduce storage costs.
+The operator supplies at least `MIN_COLLATERAL` Ether to the contract and batch registers `N` BLS keys. To save gas, the contract will not verify the signatures of the `Registration` messages, nor will it save the BLS keys directly. Instead, the register function will merkleize the inputs to a root hash called the `registrationRoot` and save this to the `registrations` mapping. An `Operator` is constructed to save the minimal data for the operator's lifecycle, optimized to reduce storage costs.
 
 ```solidity
+    /// An operator of BLS key[s]
     struct Operator {
-        /// Compressed ECDSA key without prefix
-        bytes32 proxyKey; 
-
-        /// The address used to deregister validators and claim collateral
+        /// The address used to deregister from the registry and claim collateral
         address withdrawalAddress;
-
         /// ETH collateral in GWEI
-        uint56 collateral;
-
+        uint56 collateralGwei;
         /// The block number when registration occurred
         uint32 registeredAt;
-
         /// The block number when deregistration occurred
         uint32 unregisteredAt;
-
         /// The number of blocks that must elapse between deregistering and claiming
         uint16 unregistrationDelay;
     }
@@ -92,35 +134,35 @@ The operator supplies at least `MIN_COLLATERAL` Ether to the contract and batch 
 ```mermaid
 sequenceDiagram
 autonumber
-    participant Validator
+    participant Proposer
     participant Operator
     participant URC
     
-    Operator->>Validator: Request N Registration signatures
-    Validator->>Validator: Sign with validator BLS key
-    Validator->>Operator: N Registration signatures
+    Operator->>Proposer: Request N Registration signatures
+    Proposer->>Proposer: Sign with BLS key
+    Proposer->>Operator: N Registration signatures
 
     Operator->>URC: register(...) + send ETH
-    URC->>URC: Verify collateral ≥ MIN_COLLATERAL and unregistrationDelay ≥ TWO_EPOCHS
-    URC->>URC: Merkelize Registrations to form operatorCommitment hash
+    URC->>URC: Verify collateral ≥ MIN_COLLATERAL
+    URC->>URC: Verify unregistrationDelay ≥ MIN_UNREGISTRATION_DELAY
+    URC->>URC: Merkelize Registrations to form registrationRoot hash
+    URC->>URC: Verify registrationRoot is not already registered
     URC->>URC: Create Operator struct
-    URC->>URC: Store to commitments mapping
+    URC->>URC: Store to registrations mapping
 ```
 
 ### slashRegistration()
-After registration, a fraud proof window opens during which anyone can challenge invalid registrations. Fraud occurs if a validator BLS signature did not sign over the supplied `RegistrationMessages`. To prove fraud, the challenger first provides a merkle proof to show the `signature` is part of the `OperatorCommitment` merkle tree. Then the `signature` is verified using the on-chain BLS precompiles. 
+After registration, a fraud proof window opens during which anyone can challenge invalid registrations. Fraud occurs if a validator BLS signature did not sign over the supplied `RegistrationMessages`. To prove fraud, the challenger first provides a merkle proof to show the `signature` is part of a merkle tree with the `registrationRoot` root hash. Then the `signature` is verified using the on-chain BLS precompiles. 
 
-If the fraud window expires without a successful challenge, the operator would be eligible to be considered by proposer commitment protocols.
+If the fraud window expires without a successful challenge, the operator's BLS keys are considered registered and they can participate in proposer commitment protocols.
 
 ```solidity
 function slashRegistration(
-    bytes32 operatorCommitment,
-    BLS12381.G1Point calldata pubkey,
-    BLS12381.G2Point calldata signature,
+    bytes32 registrationRoot,
+    Registration calldata reg,
     bytes32[] calldata proof,
-    bytes32 leaf,
     uint256 leafIndex
-) external view;
+) external returns (uint256 slashedCollateralWei);
 ```
 
 ```mermaid
@@ -131,19 +173,101 @@ autonumber
     participant Operator
 
     
-    Operator->>URC: register()
-	  URC->>Challenger: events
-	  Challenger->>Challenger: verify BLS off-chain
-	  Challenger->>Challenger: detect fraud
-	  Challenger->>Challenger: generate merkle proof
-    Challenger->>URC: slashRegistration()
+    Operator->>URC: register(...)
+	URC->>Challenger: emit events
+	Challenger->>Challenger: verify BLS off-chain
+	Challenger->>Challenger: detect fraud
+	Challenger->>Challenger: generate merkle proof
+    Challenger->>URC: slashRegistration(...)
+    URC->>URC: check if fraud window has expired
     URC->>URC: verify merkle proof
     URC->>URC: verify BLS signature
     URC->>Challenger: transfer MIN_COLLATERAL
+    URC->>Operator: transfer remaining collateral
 ```
 
 ## Deregistration Process
-todo
+Exiting the URC is a two-step process. First, the operator must call `unregister()`, which marks the `unregisteredAt` timestamp in the `Operator` struct. After the operator's `unregistrationDelay` has passed, they can call `claimCollateral()`, which will transfer the operator's collateral to their registered `withdrawalAddress`.
+
+```mermaid
+sequenceDiagram
+autonumber
+    participant Operator
+    participant URC
+
+    Operator->>URC: unregister(...)
+    URC->>URC: check caller is withdrawalAddress
+    URC->>URC: check unregisteredAt is not set
+    URC->>URC: set unregisteredAt
+    URC->>Operator: emit OperatorUnregistered(...)
+    Operator->>Operator: wait for unregistrationDelay blocks
+    Operator->>URC: claimCollateral(...)
+    URC->>URC: check unregisteredAt is set
+    URC->>URC: check unregistrationDelay has passed
+    URC->>URC: check collateralGwei > 0
+    URC->>URC: transfer collateral to withdrawalAddress
+    URC->>URC: delete Operator from registrations mapping
+    URC->>Operator: emit CollateralClaimed(...)
+```
 
 ## Slashing Process
-todo
+The URC supports two types of slashing:
+
+1. Registration Fraud - When an operator submits invalid BLS signatures during registration [described above](#slashregistration)
+2. Commitment Breaking - When an operator breaks a commitment defined by a Slasher contract
+
+### Commitment Breaking Process
+Operators are expected to sign `Delegation` messages with their registered BLS keys, which commit them to a protocol-defined `Slasher` contract. If the operator breaks their commitment, a challenger can supply evidence and call `slashCommitment()` on the URC. This will call the `Slasher` contract's `slash()` function, which informs the URC of the amount of collateral to be slashed.
+
+```mermaid
+sequenceDiagram
+    participant Challenger
+    participant URC
+    participant Slasher
+    participant Operator
+
+    Challenger->>URC: slashCommitment(...)
+    URC->>URC: Verify fraud window has passed
+    URC->>URC: Verify operator hasn't unregistered
+    URC->>URC: Verify merkle proof of registration
+    URC->>URC: Verify delegation signature
+    URC->>URC: Check delegation hasn't expired
+    URC->>Slasher: slash(delegation, evidence)
+    Slasher-->>Slasher: Execute protocol-defined slashing logic
+    Slasher-->>URC: Return slashAmountGwei
+    URC->>URC: Delete operator registration
+    URC->>Challenger: Transfer slashAmountGwei
+    URC->>Operator: Return remaining collateral
+```
+
+The slashing process follows these steps:
+
+1. A challenger calls `slashCommitment()` with:
+   - `registrationRoot`: The merkle root of the operator's registration
+   - `registrationSignature`: The BLS signature from registration
+   - `proof`: Merkle proof showing the key is registered
+   - `signedDelegation`: The delegation message signed by the operator
+   - `evidence`: Proof that the operator broke their commitment
+
+2. The URC performs several validations:
+   - Verifies the fraud proof window has passed
+   - Checks the operator hasn't already unregistered and their unregistration delay elapsed
+   - Verifies the merkle proof to confirm key registration
+   - Verifies the delegation signature using the operator's BLS key
+   - Checks the delegation hasn't expired
+
+3. If validations pass, the URC:
+   - Calls the Slasher contract's `slash()` function with the delegation and evidence
+   - Receives back the amount to slash (`slashAmountGwei`)
+   - Deletes the operator's registration
+   - Transfers `slashAmountGwei` to the challenger
+   - Returns any remaining collateral to the operator's withdrawal address
+
+The process will revert if:
+- The operator is not registered
+- The fraud proof window hasn't passed
+- The operator has already unregistered
+- The merkle proof is invalid
+- The delegation signature is invalid
+- The delegation has expired
+- The slash amount is 0 or exceeds the operator's collateral

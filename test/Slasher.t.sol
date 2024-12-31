@@ -314,9 +314,8 @@ contract DummySlasherTest is UnitTestHelper {
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
             metadata: "",
-            // validUntil: uint64(block.timestamp - 1) // Delegation expired
-            validUntil: 0
-        });
+            validUntil: uint64(block.timestamp - 1) // Delegation expired
+         });
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
@@ -337,6 +336,72 @@ contract DummySlasherTest is UnitTestHelper {
             result.signedDelegation,
             ""
         );
+    }
+
+    // For setup we register() and delegate to the dummy slasher
+    // The registration's withdrawal address is the reentrant contract
+    // Triggering a slash causes the reentrant contract to reenter the registry and call: addCollateral(), unregister(), claimCollateral(), slashCommitment()
+    // The test succeeds because the reentract contract catches the errors
+    function testSlashCommitmentIsReentrantProtected() public {
+        uint256 slashAmountGwei = 42;
+        dummySlasher = new DummySlasher(slashAmountGwei);
+
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            withdrawalAddress: address(0),
+            delegateSecretKey: SECRET_KEY_2,
+            slasher: address(dummySlasher),
+            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
+            metadata: "",
+            validUntil: uint64(UINT256_MAX)
+        });
+
+        (RegisterAndDelegateResult memory result, address reentrantContract) = registerAndDelegateReentrant(params);
+
+        // Setup proof
+        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        uint256 leafIndex = 0;
+        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+        bytes memory evidence = "";
+
+        // skip past fraud proof window
+        vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        uint256 bobBalanceBefore = bob.balance;
+        uint256 balanceBefore = address(reentrantContract).balance;
+        uint256 urcBalanceBefore = address(registry).balance;
+
+        // slash from a different address
+        vm.startPrank(bob);
+        // vm.prank(bob);
+        vm.expectEmit(address(registry));
+        emit IRegistry.OperatorSlashed(
+            result.registrationRoot, slashAmountGwei, result.signedDelegation.delegation.proposerPubKey
+        );
+        uint256 gotSlashAmountGwei = registry.slashCommitment(
+            result.registrationRoot,
+            result.registrations[leafIndex].signature,
+            proof,
+            leafIndex,
+            result.signedDelegation,
+            evidence
+        );
+        assertEq(slashAmountGwei, gotSlashAmountGwei, "Slash amount incorrect");
+
+        // verify balances updated correctly
+        _verifySlashingBalances(
+            bob,
+            address(reentrantContract),
+            slashAmountGwei * 1 gwei,
+            1 ether,
+            bobBalanceBefore,
+            balanceBefore,
+            urcBalanceBefore
+        );
+
+        // Verify operator was deleted
+        _assertRegistration(result.registrationRoot, address(0), 0, 0, 0, 0);
     }
 }
 

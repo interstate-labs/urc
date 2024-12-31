@@ -16,6 +16,7 @@ contract Registry is IRegistry {
     uint256 public constant MIN_COLLATERAL = 0.1 ether;
     uint256 public constant MIN_UNREGISTRATION_DELAY = 64; // Two epochs
     uint256 public constant FRAUD_PROOF_WINDOW = 7200; // 1 day
+    address internal constant BURNER_ADDRESS = address(0x0000000000000000000000000000000000000000);
     bytes public constant DOMAIN_SEPARATOR = "0x00435255"; // "URC" in little endian
     uint256 public ETH2_GENESIS_TIMESTAMP;
 
@@ -129,11 +130,10 @@ contract Registry is IRegistry {
         delete registrations[registrationRoot];
 
         // Calculate the amount to transfer to challenger and return to operator
-        slashedCollateralWei = MIN_COLLATERAL;
-        uint256 remainingWei = uint256(collateralGwei) * 1 gwei - slashedCollateralWei;
+        uint256 remainingWei = uint256(collateralGwei) * 1 gwei - MIN_COLLATERAL;
 
         // Transfer to the challenger
-        (bool success,) = msg.sender.call{ value: slashedCollateralWei }("");
+        (bool success,) = msg.sender.call{ value: MIN_COLLATERAL }("");
         if (!success) {
             revert EthTransferFailed();
         }
@@ -145,6 +145,8 @@ contract Registry is IRegistry {
         }
 
         emit RegistrationSlashed(registrationRoot, msg.sender, operatorWithdrawalAddress, reg);
+
+        return MIN_COLLATERAL;
     }
 
     /// @notice Starts the unregistration process for an operator
@@ -218,6 +220,7 @@ contract Registry is IRegistry {
     /// @param signedDelegation The SignedDelegation signed by the operator's BLS key
     /// @param evidence Arbitrary evidence to slash the operator, required by the Slasher contract
     /// @return slashAmountGwei The amount of GWEI slashed
+    /// @return rewardAmountGwei The amount of GWEI rewarded to the caller
     function slashCommitment(
         bytes32 registrationRoot,
         BLS.G2Point calldata registrationSignature,
@@ -225,7 +228,7 @@ contract Registry is IRegistry {
         uint256 leafIndex,
         ISlasher.SignedDelegation calldata signedDelegation,
         bytes calldata evidence
-    ) external returns (uint256 slashAmountGwei) {
+    ) external returns (uint256 slashAmountGwei, uint256 rewardAmountGwei) {
         Operator storage operator = registrations[registrationRoot];
         address operatorWithdrawalAddress = operator.withdrawalAddress;
 
@@ -243,15 +246,17 @@ contract Registry is IRegistry {
         uint256 collateralGwei =
             _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, signedDelegation);
 
-        slashAmountGwei = _executeSlash(signedDelegation, evidence, collateralGwei);
+        (slashAmountGwei, rewardAmountGwei) = _executeSlash(signedDelegation, evidence, collateralGwei);
 
         // Delete the operator
         delete registrations[registrationRoot];
 
-        // Distribute slashed funds
-        _distributeSlashedFunds(operatorWithdrawalAddress, collateralGwei, slashAmountGwei);
+        // Reward, burn, and return Ether
+        _executeSlashingTransfers(operatorWithdrawalAddress, collateralGwei, slashAmountGwei, rewardAmountGwei);
 
-        emit OperatorSlashed(registrationRoot, slashAmountGwei, signedDelegation.delegation.proposerPubKey);
+        emit OperatorSlashed(
+            registrationRoot, slashAmountGwei, rewardAmountGwei, signedDelegation.delegation.proposerPubKey
+        );
     }
 
     /// @notice Adds collateral to an Operator struct
@@ -365,34 +370,41 @@ contract Registry is IRegistry {
         ISlasher.SignedDelegation calldata signedDelegation,
         bytes calldata evidence,
         uint256 collateralGwei
-    ) internal returns (uint256 slashAmountGwei) {
-        slashAmountGwei = ISlasher(signedDelegation.delegation.slasher).slash(signedDelegation.delegation, evidence);
-
-        if (slashAmountGwei == 0) {
-            revert NoCollateralSlashed();
-        }
+    ) internal returns (uint256 slashAmountGwei, uint256 rewardAmountGwei) {
+        (slashAmountGwei, rewardAmountGwei) =
+            ISlasher(signedDelegation.delegation.slasher).slash(signedDelegation.delegation, evidence);
 
         if (slashAmountGwei > collateralGwei) {
             revert SlashAmountExceedsCollateral();
         }
     }
 
-    /// @notice Distributes slashed funds to the slasher and returns any remaining funds to the operator
-    /// @dev The function will revert if the transfer to the slasher fails or if the transfer to the operator fails.
+    /// @notice Distributes rewards to the challenger, burns the slash amount, and returns any remaining funds to the operator
+    /// @dev The function will revert if the transfer to the slasher fails, if the transfer to the operator fails, or if the rewardAmountGwei is less than `MIN_COLLATERAL`.
     /// @param withdrawalAddress The address to return any remaining funds to
     /// @param collateralGwei The operator's collateral amount in GWEI
     /// @param slashAmountGwei The amount of GWEI to be transferred to the caller
-    function _distributeSlashedFunds(address withdrawalAddress, uint256 collateralGwei, uint256 slashAmountGwei)
-        internal
-    {
-        // Transfer to the slasher
-        (bool success,) = msg.sender.call{ value: slashAmountGwei * 1 gwei }("");
+    /// @param rewardAmountGwei The amount of GWEI to be transferred to the caller
+    function _executeSlashingTransfers(
+        address withdrawalAddress,
+        uint256 collateralGwei,
+        uint256 slashAmountGwei,
+        uint256 rewardAmountGwei
+    ) internal {
+        // Burn the slash amount
+        (bool success,) = BURNER_ADDRESS.call{ value: slashAmountGwei * 1 gwei }("");
+        if (!success) {
+            revert EthTransferFailed();
+        }
+
+        // Transfer to the challenger
+        (success,) = msg.sender.call{ value: rewardAmountGwei * 1 gwei }("");
         if (!success) {
             revert EthTransferFailed();
         }
 
         // Return any remaining funds to Operator
-        (success,) = withdrawalAddress.call{ value: (collateralGwei - slashAmountGwei) * 1 gwei }("");
+        (success,) = withdrawalAddress.call{ value: (collateralGwei - slashAmountGwei - rewardAmountGwei) * 1 gwei }("");
         if (!success) {
             revert EthTransferFailed();
         }

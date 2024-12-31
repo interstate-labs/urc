@@ -30,11 +30,12 @@ contract ExclusionPreconfSlasherTest is UnitTestHelper {
     ExclusionPreconfSlasher slasher;
     BLS.G1Point delegatePubKey;
     uint256 slashAmountGwei = 1 ether / 1 gwei; // slash 1 ether
-    uint256 collateral = 1 ether;
+    uint256 rewardAmountGwei = 0.1 ether / 1 gwei; // reward 0.1 ether
+    uint256 collateral = 1.1 ether;
 
     function setUp() public {
         vm.createSelectFork(vm.rpcUrl("mainnet"));
-        slasher = new ExclusionPreconfSlasher(slashAmountGwei);
+        slasher = new ExclusionPreconfSlasher(slashAmountGwei, rewardAmountGwei);
         registry = new Registry();
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
     }
@@ -199,7 +200,14 @@ contract ExclusionPreconfSlasherTest is UnitTestHelper {
 
         // verify balances updated correctly
         _verifySlashingBalances(
-            bob, alice, slashAmountGwei * 1 gwei, collateral, bobBalanceBefore, aliceBalanceBefore, urcBalanceBefore
+            bob,
+            alice,
+            slashAmountGwei * 1 gwei,
+            rewardAmountGwei * 1 gwei,
+            collateral,
+            bobBalanceBefore,
+            aliceBalanceBefore,
+            urcBalanceBefore
         );
 
         // Verify operator was deleted

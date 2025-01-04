@@ -18,7 +18,7 @@ contract DummySlasher is ISlasher {
         return bytes("DUMMY-SLASHER-DOMAIN-SEPARATOR");
     }
 
-    function slash(ISlasher.Delegation calldata delegation, bytes calldata evidence)
+    function slash(ISlasher.Delegation calldata delegation, bytes calldata evidence, address challenger)
         external
         returns (uint256 slashAmountGwei, uint256 rewardAmountGwei)
     {
@@ -35,7 +35,8 @@ contract DummySlasherTest is UnitTestHelper {
     function setUp() public {
         registry = new Registry();
         dummySlasher = new DummySlasher();
-        vm.deal(alice, 100 ether); // Give alice some ETH
+        vm.deal(operator, 100 ether);
+        vm.deal(challenger, 100 ether);
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
     }
 
@@ -43,7 +44,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: alice,
+            withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
@@ -62,12 +63,11 @@ contract DummySlasherTest is UnitTestHelper {
         // skip past fraud proof window
         vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
 
-        uint256 bobBalanceBefore = bob.balance;
-        uint256 aliceBalanceBefore = alice.balance;
+        uint256 challengerBalanceBefore = challenger.balance;
+        uint256 operatorBalanceBefore = operator.balance;
         uint256 urcBalanceBefore = address(registry).balance;
 
-        // slash from a different address
-        vm.startPrank(bob);
+        vm.startPrank(challenger);
         vm.expectEmit(address(registry));
         emit IRegistry.OperatorSlashed(
             result.registrationRoot,
@@ -75,6 +75,7 @@ contract DummySlasherTest is UnitTestHelper {
             dummySlasher.REWARD_AMOUNT_GWEI(),
             result.signedDelegation.delegation.proposerPubKey
         );
+
         (uint256 gotSlashAmountGwei, uint256 gotRewardAmountGwei) = registry.slashCommitment(
             result.registrationRoot,
             result.registrations[leafIndex].signature,
@@ -83,21 +84,18 @@ contract DummySlasherTest is UnitTestHelper {
             result.signedDelegation,
             evidence
         );
-        assertEq(dummySlasher.SLASH_AMOUNT_GWEI(), gotSlashAmountGwei, "Slash amount incorrect");
 
-        // verify balances updated correctly
         _verifySlashingBalances(
-            bob,
-            alice,
+            challenger,
+            operator,
             dummySlasher.SLASH_AMOUNT_GWEI() * 1 gwei,
             dummySlasher.REWARD_AMOUNT_GWEI() * 1 gwei,
             collateral,
-            bobBalanceBefore,
-            aliceBalanceBefore,
+            challengerBalanceBefore,
+            operatorBalanceBefore,
             urcBalanceBefore
         );
 
-        // Verify operator was deleted
         _assertRegistration(result.registrationRoot, address(0), 0, 0, 0, 0);
     }
 
@@ -105,7 +103,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: alice,
+            withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
@@ -136,7 +134,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: alice,
+            withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
@@ -162,7 +160,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: alice,
+            withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
@@ -197,7 +195,7 @@ contract DummySlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: dummySlasher.SLASH_AMOUNT_GWEI() * 1 gwei - 1, // less than the slash amount
-            withdrawalAddress: alice,
+            withdrawalAddress: operator,
             delegateSecretKey: SECRET_KEY_2,
             slasher: address(dummySlasher),
             domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
@@ -213,7 +211,7 @@ contract DummySlasherTest is UnitTestHelper {
 
         vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
 
-        vm.startPrank(bob);
+        vm.startPrank(challenger);
         vm.expectRevert(IRegistry.SlashAmountExceedsCollateral.selector);
         registry.slashCommitment(
             result.registrationRoot,
@@ -259,39 +257,6 @@ contract DummySlasherTest is UnitTestHelper {
         );
     }
 
-    function testRevertDelegationExpired() public {
-        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
-            proposerSecretKey: SECRET_KEY_1,
-            collateral: collateral,
-            withdrawalAddress: alice,
-            delegateSecretKey: SECRET_KEY_2,
-            slasher: address(dummySlasher),
-            domainSeparator: dummySlasher.DOMAIN_SEPARATOR(),
-            metadata: "",
-            validUntil: uint64(block.timestamp - 1) // Delegation expired
-         });
-
-        RegisterAndDelegateResult memory result = registerAndDelegate(params);
-
-        vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
-        vm.warp(block.number * 12);
-
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
-        uint256 leafIndex = 0;
-        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
-
-        vm.prank(bob);
-        vm.expectRevert(IRegistry.DelegationExpired.selector);
-        registry.slashCommitment(
-            result.registrationRoot,
-            result.registrations[leafIndex].signature,
-            proof,
-            leafIndex,
-            result.signedDelegation,
-            ""
-        );
-    }
-
     // For setup we register() and delegate to the dummy slasher
     // The registration's withdrawal address is the reentrant contract
     // Triggering a slash causes the reentrant contract to reenter the registry and call: addCollateral(), unregister(), claimCollateral(), slashCommitment()
@@ -318,12 +283,12 @@ contract DummySlasherTest is UnitTestHelper {
         // skip past fraud proof window
         vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
 
-        uint256 aliceBalanceBefore = alice.balance;
+        uint256 challengerBalanceBefore = challenger.balance;
         uint256 reentrantContractBalanceBefore = reentrantContract.balance;
         uint256 urcBalanceBefore = address(registry).balance;
 
         // slash from a different address
-        vm.startPrank(alice);
+        vm.startPrank(challenger);
         vm.expectEmit(address(registry));
         emit IRegistry.OperatorSlashed(
             result.registrationRoot,
@@ -338,12 +303,12 @@ contract DummySlasherTest is UnitTestHelper {
 
         // verify balances updated correctly
         _verifySlashingBalances(
-            alice,
+            challenger,
             address(reentrantContract),
             dummySlasher.SLASH_AMOUNT_GWEI() * 1 gwei,
             dummySlasher.REWARD_AMOUNT_GWEI() * 1 gwei,
             IReentrantContract(reentrantContract).collateral(),
-            aliceBalanceBefore,
+            challengerBalanceBefore,
             reentrantContractBalanceBefore,
             urcBalanceBefore
         );

@@ -345,11 +345,6 @@ contract Registry is IRegistry {
         // Reconstruct Delegation message
         bytes memory message = abi.encode(signedDelegation.delegation);
 
-        // Check if the delegation is fresh
-        if (signedDelegation.delegation.validUntil < _getSlotFromTimestamp(block.timestamp)) {
-            revert DelegationExpired();
-        }
-
         // Recover Slasher contract domain separator
         bytes memory domainSeparator = ISlasher(signedDelegation.delegation.slasher).DOMAIN_SEPARATOR();
 
@@ -372,7 +367,7 @@ contract Registry is IRegistry {
         uint256 collateralGwei
     ) internal returns (uint256 slashAmountGwei, uint256 rewardAmountGwei) {
         (slashAmountGwei, rewardAmountGwei) =
-            ISlasher(signedDelegation.delegation.slasher).slash(signedDelegation.delegation, evidence);
+            ISlasher(signedDelegation.delegation.slasher).slash(signedDelegation.delegation, evidence, msg.sender);
 
         if (slashAmountGwei > collateralGwei) {
             revert SlashAmountExceedsCollateral();

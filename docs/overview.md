@@ -59,7 +59,7 @@ Registration signatures are created as follows:
 ```
 ---
 
-`Delegation` messages are off-chain messages defined in the [Constraints API](https://github.com/ethereum-commitments/preconf-specs). The message is signed by a proposer's BLS key to delegate to another party. 
+`Delegation` messages are off-chain messages defined in the [Constraints API](https://github.com/ethereum-commitments/constraints-specs). The message is signed by a proposer's BLS key to delegate to another party. 
 ```Solidity
 struct Delegation {
     /// The proposer's BLS public key

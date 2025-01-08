@@ -53,3 +53,6 @@ See the [examples](./example/README.md) for reference implementations of Slasher
 - [Paradigm's solidity implementation of BLS12-381 using Pectra BLS precompiles](https://github.com/paradigmxyz/forge-alphanet/blob/main/src/sign/BLS.sol)
 - [Jason's Sequencing week presentation](https://docs.google.com/presentation/d/1-iuKIMwV9lxw4BBdhHL3_hWDysTWOWS-lWPpCmDvl6g/edit#slide=id.g3131bf307dc_0_67)
 - [Jason's Sequencing Day presentation](https://docs.google.com/presentation/d/1aR1iY4bcRc3RApAt2xx1gV7DEqcEQZZd0rgMo3ozXC0/edit#slide=id.p)
+
+### License
+MIT + Apache-2.0

@@ -15,7 +15,7 @@ import {TransactionDecoder} from "./lib/TransactionDecoder.sol";
 import {PreconfStructs} from "./PreconfStructs.sol";
 import {ISlasher} from "../src/ISlasher.sol";
 
-contract ExclusionPreconfSlasher is ISlasher, PreconfStructs {
+contract StateLockSlasher is ISlasher, PreconfStructs {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
     using TransactionDecoder for bytes;

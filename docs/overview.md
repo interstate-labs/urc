@@ -59,7 +59,7 @@ Registration signatures are created as follows:
 ```
 ---
 
-`Delegation` messages are off-chain messages defined in the [Constraints API](https://github.com/ethereum-commitments/preconf-specs). The message is signed by a proposer's BLS key to delegate to another party. 
+`Delegation` messages are off-chain messages defined in the [Constraints API](https://github.com/ethereum-commitments/constraints-specs). The message is signed by a proposer's BLS key to delegate to another party. 
 ```Solidity
 struct Delegation {
     /// The proposer's BLS public key
@@ -217,7 +217,7 @@ The URC supports two types of slashing:
 2. Commitment Breaking - When an operator breaks a commitment defined by a Slasher contract
 
 ### Commitment Breaking Process
-Operators are expected to sign `Delegation` messages with their registered BLS keys, which commit them to a protocol-defined `Slasher` contract. If the operator breaks their commitment, a challenger can supply evidence and call `slashCommitment()` on the URC. This will call the `Slasher` contract's `slash()` function, which informs the URC of the amount of collateral to be slashed.
+Operators are expected to sign `Delegation` messages with their registered BLS keys, which commit them to a protocol-defined `Slasher` contract. If the operator breaks their commitment, a challenger can supply evidence and call `slashCommitment()` on the URC. This will call the `Slasher` contract's `slash()` function, which informs the URC of the amount of collateral to be slashed and the amount to reward the challenger.
 
 ```mermaid
 sequenceDiagram
@@ -232,11 +232,12 @@ sequenceDiagram
     URC->>URC: Verify merkle proof of registration
     URC->>URC: Verify delegation signature
     URC->>URC: Check delegation hasn't expired
-    URC->>Slasher: slash(delegation, evidence)
+    URC->>Slasher: slash(delegation, evidence, challenger)
     Slasher-->>Slasher: Execute protocol-defined slashing logic
-    Slasher-->>URC: Return slashAmountGwei
+    Slasher-->>URC: Return slashAmountGwei, rewardAmountGwei
     URC->>URC: Delete operator registration
-    URC->>Challenger: Transfer slashAmountGwei
+    URC->>URC: Burn slashAmountGwei
+    URC->>Challenger: Transfer rewardAmountGwei
     URC->>Operator: Return remaining collateral
 ```
 
@@ -258,9 +259,10 @@ The slashing process follows these steps:
 
 3. If validations pass, the URC:
    - Calls the Slasher contract's `slash()` function with the delegation and evidence
-   - Receives back the amount to slash (`slashAmountGwei`)
+   - Receives back the amount to slash (`slashAmountGwei`) and the amount to reward the challenger (`rewardAmountGwei`)
    - Deletes the operator's registration
-   - Transfers `slashAmountGwei` to the challenger
+   - Burns `slashAmountGwei`
+   - Transfers `rewardAmountGwei` to the challenger
    - Returns any remaining collateral to the operator's withdrawal address
 
 The process will revert if:

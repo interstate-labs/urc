@@ -17,17 +17,17 @@ import { Registry } from "../src/Registry.sol";
 import { BLS } from "../src/lib/BLS.sol";
 import { MerkleTree } from "../src/lib/MerkleTree.sol";
 import { PreconfStructs } from "../example/PreconfStructs.sol";
-import { ExclusionPreconfSlasher } from "../example/ExclusionPreconfSlasher.sol";
+import { StateLockSlasher } from "../example/StateLockSlasher.sol";
 import { UnitTestHelper } from "./UnitTestHelper.sol";
 
-contract ExclusionPreconfSlasherTest is UnitTestHelper {
+contract StateLockSlasherTest is UnitTestHelper {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
     using BytesUtils for bytes;
     using TransactionDecoder for TransactionDecoder.Transaction;
     using TransactionDecoder for bytes;
 
-    ExclusionPreconfSlasher slasher;
+    StateLockSlasher slasher;
     BLS.G1Point delegatePubKey;
     uint256 slashAmountGwei = 1 ether / 1 gwei; // slash 1 ether
     uint256 rewardAmountGwei = 0.1 ether / 1 gwei; // reward 0.1 ether
@@ -35,7 +35,7 @@ contract ExclusionPreconfSlasherTest is UnitTestHelper {
 
     function setUp() public {
         vm.createSelectFork(vm.rpcUrl("mainnet"));
-        slasher = new ExclusionPreconfSlasher(slashAmountGwei, rewardAmountGwei);
+        slasher = new StateLockSlasher(slashAmountGwei, rewardAmountGwei);
         registry = new Registry();
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
     }
@@ -143,7 +143,7 @@ contract ExclusionPreconfSlasherTest is UnitTestHelper {
 
         // Delegate signs a commitment to exclude a TX
         PreconfStructs.SignedCommitment memory commitment =
-            _createExclusionCommitment(exclusionBlockNumber, id, delegate, delegatePK);
+            _createStateLockCommitment(exclusionBlockNumber, id, delegate, delegatePK);
 
         // Build the inclusion proof to prove failure to exclude
         string memory rawPreviousHeader = vm.readFile("./test/testdata/header_20785011.json");
@@ -217,7 +217,7 @@ contract ExclusionPreconfSlasherTest is UnitTestHelper {
     // =========== Helper functions ===========
 
     // Helper to create a test inclusion proof with a recent slot, valid for a recent challenge
-    function _createExclusionCommitment(uint256 blockNumber, uint256 id, address delegate, uint256 delegatePK)
+    function _createStateLockCommitment(uint256 blockNumber, uint256 id, address delegate, uint256 delegatePK)
         internal
         view
         returns (PreconfStructs.SignedCommitment memory commitment)

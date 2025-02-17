@@ -15,13 +15,14 @@ import { SecureMerkleTrie } from "../example/lib/trie/SecureMerkleTrie.sol";
 import { TransactionDecoder } from "../example/lib/TransactionDecoder.sol";
 import { Registry } from "../src/Registry.sol";
 import { IRegistry } from "../src/IRegistry.sol";
+import { ISlasher } from "../src/ISlasher.sol";
 import { BLS } from "../src/lib/BLS.sol";
 import { MerkleTree } from "../src/lib/MerkleTree.sol";
 import { PreconfStructs } from "../example/PreconfStructs.sol";
 import { StateLockSlasher } from "../example/StateLockSlasher.sol";
 import { UnitTestHelper } from "./UnitTestHelper.sol";
 
-contract StateLockSlasherTest is UnitTestHelper {
+contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
     using BytesUtils for bytes;
@@ -31,14 +32,17 @@ contract StateLockSlasherTest is UnitTestHelper {
     StateLockSlasher slasher;
     BLS.G1Point delegatePubKey;
     uint256 slashAmountGwei = 1 ether / 1 gwei; // slash 1 ether
-    uint256 rewardAmountGwei = 0.1 ether / 1 gwei; // reward 0.1 ether
     uint256 collateral = 1.1 ether;
+    uint256 committerSecretKey;
+    address committer;
 
     function setUp() public {
         vm.createSelectFork(vm.rpcUrl("mainnet"));
-        slasher = new StateLockSlasher(slashAmountGwei, rewardAmountGwei);
+        slasher = new StateLockSlasher(slashAmountGwei);
         registry = new Registry();
+        (committer, committerSecretKey) = makeAddrAndKey("commitmentsKey");
         delegatePubKey = BLS.toPublicKey(SECRET_KEY_2);
+        vm.deal(committer, 100 ether);
     }
 
     function testProveTransactionInclusion() public {
@@ -99,7 +103,7 @@ contract StateLockSlasherTest is UnitTestHelper {
         vm.pauseGasMetering();
     }
 
-    function setupRegistration(address operator, address delegate)
+    function setupRegistration(address operator, address delegate, uint64 slot)
         internal
         returns (RegisterAndDelegateResult memory result)
     {
@@ -110,41 +114,47 @@ contract StateLockSlasherTest is UnitTestHelper {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
             collateral: collateral,
-            withdrawalAddress: operator,
+            owner: operator,
             delegateSecretKey: SECRET_KEY_2,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
             slasher: address(slasher),
-            domainSeparator: slasher.DOMAIN_SEPARATOR(),
             metadata: metadata,
-            validUntil: uint64(UINT256_MAX)
+            slot: slot
         });
 
         // Register operator to URC and signs delegation message
         result = registerAndDelegate(params);
     }
 
-    function setupSlash(uint256 id) public returns (RegisterAndDelegateResult memory result, bytes memory evidence) {
+    function setupSlash(uint256 id)
+        public
+        returns (
+            RegisterAndDelegateResult memory result,
+            ISlasher.SignedCommitment memory signedCommitment,
+            bytes memory evidence
+        )
+    {
         uint256 exclusionBlockNumber = 20_785_012;
         // Create new keypair and fund wallet
         (address alice, uint256 alicePK) = makeAddrAndKey(string.concat("alice_", vm.toString(id)));
         vm.deal(alice, 100 ether); // Give alice some ETH
-
-        // Create ecdsa keypair for delegate
-        (address delegate, uint256 delegatePK) = makeAddrAndKey("delegate");
 
         // Advance before the fraud proof window
         vm.roll(exclusionBlockNumber - registry.FRAUD_PROOF_WINDOW());
         vm.warp(exclusionBlockNumber - registry.FRAUD_PROOF_WINDOW() * 12);
 
         // Register and delegate
-        result = setupRegistration(alice, delegate);
+        result = setupRegistration(alice, delegate, 9994114 - 100);
 
         // Advance over registration fraud proof window to the target slot
         vm.roll(exclusionBlockNumber);
         vm.warp(slasher._getTimestampFromSlot(9994114)); // https://etherscan.io/block/20785012
 
+        // Register and delegate
         // Delegate signs a commitment to exclude a TX
-        PreconfStructs.SignedCommitment memory commitment =
-            _createStateLockCommitment(exclusionBlockNumber, id, delegate, delegatePK);
+        TransactionCommitment memory commitment =
+            _createStateLockCommitment(exclusionBlockNumber, id, committer, committerSecretKey);
 
         // Build the inclusion proof to prove failure to exclude
         string memory rawPreviousHeader = vm.readFile("./test/testdata/header_20785011.json");
@@ -158,7 +168,7 @@ contract StateLockSlasherTest is UnitTestHelper {
         uint256[] memory txIndexesInBlock = new uint256[](1);
         txIndexesInBlock[0] = vm.parseJsonUint(txProof, ".index");
 
-        PreconfStructs.InclusionProof memory inclusionProof = PreconfStructs.InclusionProof({
+        InclusionProof memory inclusionProof = InclusionProof({
             inclusionBlockNumber: exclusionBlockNumber,
             previousBlockHeaderRLP: vm.parseJsonBytes(rawPreviousHeader, ".result"),
             inclusionBlockHeaderRLP: vm.parseJsonBytes(rawInclusionHeader, ".result"),
@@ -171,12 +181,18 @@ contract StateLockSlasherTest is UnitTestHelper {
         bytes32 inclusionTxRoot = slasher._decodeBlockHeaderRLP(inclusionProof.inclusionBlockHeaderRLP).txRoot;
         assertEq(inclusionTxRoot, vm.parseJsonBytes32(txProof, ".root"));
 
-        evidence = abi.encode(commitment, inclusionProof);
+        signedCommitment = basicCommitment(committerSecretKey, address(slasher), abi.encode(commitment));
+
+        evidence = abi.encode(inclusionProof);
     }
 
     function test_slash() public {
         // Register at URC and generate slashable evidence
-        (RegisterAndDelegateResult memory result, bytes memory evidence) = setupSlash(1);
+        (
+            RegisterAndDelegateResult memory result,
+            ISlasher.SignedCommitment memory signedCommitment,
+            bytes memory evidence
+        ) = setupSlash(1);
 
         // Merkle proof for URC registration
         bytes32[] memory leaves = _hashToLeaves(result.registrations);
@@ -185,7 +201,6 @@ contract StateLockSlasherTest is UnitTestHelper {
 
         // Save for comparison after slashing
         uint256 challengerBalanceBefore = challenger.balance;
-        uint256 operatorBalanceBefore = operator.balance;
         uint256 urcBalanceBefore = address(registry).balance;
 
         // Slash via URC
@@ -196,28 +211,26 @@ contract StateLockSlasherTest is UnitTestHelper {
             registrationProof,
             leafIndex,
             result.signedDelegation,
+            signedCommitment,
             evidence
         );
 
         _verifySlashCommitmentBalances(
-            challenger, slashAmountGwei * 1 gwei, rewardAmountGwei * 1 gwei, challengerBalanceBefore, urcBalanceBefore
+            challenger, slashAmountGwei * 1 gwei, 0, challengerBalanceBefore, urcBalanceBefore
         );
 
         // Retrieve operator data
-        IRegistry.Operator memory operatorData = getRegistrationData(result.registrationRoot);
+        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
         // Verify operator's slashedAt is set
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
 
         // Verify operator's collateralGwei is decremented
-        assertEq(
-            operatorData.collateralGwei,
-            collateral / 1 gwei - slashAmountGwei - rewardAmountGwei,
-            "collateralGwei not decremented"
-        );
+        assertEq(operatorData.collateralGwei, collateral / 1 gwei - slashAmountGwei, "collateralGwei not decremented");
 
         // Verify the slashedBefore mapping is set
-        bytes32 slashingDigest = keccak256(abi.encode(result.signedDelegation, result.registrationRoot));
+        bytes32 slashingDigest =
+            keccak256(abi.encode(result.signedDelegation, signedCommitment, result.registrationRoot));
         assertEq(registry.slashedBefore(slashingDigest), true, "slashedBefore not set");
     }
 
@@ -227,7 +240,7 @@ contract StateLockSlasherTest is UnitTestHelper {
     function _createStateLockCommitment(uint256 blockNumber, uint256 id, address delegate, uint256 delegatePK)
         internal
         view
-        returns (PreconfStructs.SignedCommitment memory commitment)
+        returns (TransactionCommitment memory commitment)
     {
         // pattern: ./test/testdata/signed_tx_{blockNumber}_{id}.json
         string memory base = "./test/testdata/signed_tx_";

@@ -21,23 +21,19 @@ contract UnitTestHelper is Test {
     uint256 constant SECRET_KEY_2 = 67890;
 
     /// @dev Helper to create a BLS signature for a registration
-    function _registrationSignature(uint256 secretKey, address withdrawalAddress, uint16 unregistrationDelay)
-        internal
-        view
-        returns (BLS.G2Point memory)
-    {
-        bytes memory message = abi.encodePacked(withdrawalAddress, unregistrationDelay);
-        return BLS.sign(message, secretKey, registry.DOMAIN_SEPARATOR());
+    function _registrationSignature(uint256 secretKey, address owner) internal view returns (BLS.G2Point memory) {
+        bytes memory message = abi.encode(owner);
+        return BLS.sign(message, secretKey, registry.REGISTRATION_DOMAIN_SEPARATOR());
     }
 
     /// @dev Creates a Registration struct with a real BLS keypair
-    function _createRegistration(uint256 secretKey, address withdrawalAddress, uint16 unregistrationDelay)
+    function _createRegistration(uint256 secretKey, address owner)
         internal
         view
         returns (IRegistry.Registration memory)
     {
         BLS.G1Point memory pubkey = BLS.toPublicKey(secretKey);
-        BLS.G2Point memory signature = _registrationSignature(secretKey, withdrawalAddress, unregistrationDelay);
+        BLS.G2Point memory signature = _registrationSignature(secretKey, owner);
 
         return IRegistry.Registration({ pubkey: pubkey, signature: signature });
     }
@@ -45,19 +41,17 @@ contract UnitTestHelper is Test {
     /// @dev Helper to verify operator data matches expected values
     function _assertRegistration(
         bytes32 registrationRoot,
-        address expectedWithdrawalAddress,
+        address expectedowner,
         uint56 expectedCollateral,
         uint32 expectedRegisteredAt,
         uint32 expectedUnregisteredAt,
-        uint16 expectedUnregistrationDelay,
         uint32 expectedSlashedAt
-    ) internal {
-        IRegistry.Operator memory operatorData = getRegistrationData(registrationRoot);
-        assertEq(operatorData.withdrawalAddress, expectedWithdrawalAddress, "Wrong withdrawal address");
+    ) internal view {
+        OperatorData memory operatorData = getRegistrationData(registrationRoot);
+        assertEq(operatorData.owner, expectedowner, "Wrong withdrawal address");
         assertEq(operatorData.collateralGwei, expectedCollateral, "Wrong collateral amount");
         assertEq(operatorData.registeredAt, expectedRegisteredAt, "Wrong registration block");
         assertEq(operatorData.unregisteredAt, expectedUnregisteredAt, "Wrong unregistration block");
-        assertEq(operatorData.unregistrationDelay, expectedUnregistrationDelay, "Wrong unregistration delay");
         assertEq(operatorData.slashedAt, expectedSlashedAt, "Wrong slashed block");
     }
 
@@ -69,19 +63,13 @@ contract UnitTestHelper is Test {
         return leaves;
     }
 
-    // New helper functions
-    function _setupBasicRegistrationParams() internal view returns (uint16 unregistrationDelay, uint256 collateral) {
-        unregistrationDelay = uint16(registry.MIN_UNREGISTRATION_DELAY());
-        collateral = registry.MIN_COLLATERAL();
-    }
-
-    function _setupSingleRegistration(uint256 secretKey, address withdrawalAddr, uint16 unregistrationDelay)
+    function _setupSingleRegistration(uint256 secretKey, address owner)
         internal
         view
         returns (IRegistry.Registration[] memory)
     {
         IRegistry.Registration[] memory registrations = new IRegistry.Registration[](1);
-        registrations[0] = _createRegistration(secretKey, withdrawalAddr, unregistrationDelay);
+        registrations[0] = _createRegistration(secretKey, owner);
         return registrations;
     }
 
@@ -94,7 +82,7 @@ contract UnitTestHelper is Test {
         uint256 _challengerBalanceBefore,
         uint256 _operatorBalanceBefore,
         uint256 _urcBalanceBefore
-    ) internal {
+    ) internal view {
         assertEq(_challenger.balance, _challengerBalanceBefore + _rewardAmount, "challenger didn't receive reward");
         assertEq(
             _operator.balance,
@@ -110,70 +98,86 @@ contract UnitTestHelper is Test {
         uint256 _rewardAmount,
         uint256 _challengerBalanceBefore,
         uint256 _urcBalanceBefore
-    ) internal {
+    ) internal view {
         assertEq(_challenger.balance, _challengerBalanceBefore + _rewardAmount, "challenger didn't receive reward");
         assertEq(address(registry).balance, _urcBalanceBefore - _slashedAmount - _rewardAmount, "urc balance incorrect");
     }
 
-    function getRegistrationData(bytes32 registrationRoot) public view returns (IRegistry.Operator memory) {
+    struct OperatorData {
+        address owner;
+        uint56 collateralGwei;
+        uint8 numKeys;
+        uint32 registeredAt;
+        uint32 unregisteredAt;
+        uint32 slashedAt;
+    }
+
+    function getRegistrationData(bytes32 registrationRoot) public view returns (OperatorData memory) {
         (
-            address withdrawalAddress,
+            address owner,
             uint56 collateralGwei,
+            uint8 numKeys,
             uint32 registeredAt,
             uint32 unregisteredAt,
-            uint16 unregistrationDelay,
             uint32 slashedAt
         ) = registry.registrations(registrationRoot);
 
-        return IRegistry.Operator({
-            withdrawalAddress: withdrawalAddress,
+        return OperatorData({
+            owner: owner,
             collateralGwei: collateralGwei,
+            numKeys: numKeys,
             registeredAt: registeredAt,
             unregisteredAt: unregisteredAt,
-            unregistrationDelay: unregistrationDelay,
             slashedAt: slashedAt
         });
     }
 
-    function basicRegistration(uint256 secretKey, uint256 collateral, address withdrawalAddress)
+    function basicRegistration(uint256 secretKey, uint256 collateral, address owner)
         public
         returns (bytes32 registrationRoot, IRegistry.Registration[] memory registrations)
     {
-        (uint16 unregistrationDelay,) = _setupBasicRegistrationParams();
+        registrations = _setupSingleRegistration(secretKey, owner);
 
-        registrations = _setupSingleRegistration(secretKey, withdrawalAddress, unregistrationDelay);
-
-        registrationRoot = registry.register{ value: collateral }(registrations, withdrawalAddress, unregistrationDelay);
+        registrationRoot = registry.register{ value: collateral }(registrations, owner);
 
         _assertRegistration(
-            registrationRoot,
-            withdrawalAddress,
-            uint56(collateral / 1 gwei),
-            uint32(block.number),
-            type(uint32).max,
-            unregistrationDelay,
-            0
+            registrationRoot, owner, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
         );
     }
 
-    function signDelegation(uint256 secretKey, ISlasher.Delegation memory delegation, bytes memory domainSeparator)
+    function basicCommitment(uint256 secretKey, address slasher, bytes memory payload)
+        public
+        pure
+        returns (ISlasher.SignedCommitment memory signedCommitment)
+    {
+        ISlasher.Commitment memory commitment =
+            ISlasher.Commitment({ commitmentType: 0, payload: payload, slasher: slasher });
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(secretKey, keccak256(abi.encode(commitment)));
+        bytes memory signature = abi.encodePacked(r, s, v);
+        signedCommitment = ISlasher.SignedCommitment({ commitment: commitment, signature: signature });
+    }
+
+    function signDelegation(uint256 secretKey, ISlasher.Delegation memory delegation)
         public
         view
         returns (ISlasher.SignedDelegation memory)
     {
-        BLS.G2Point memory signature = BLS.sign(abi.encode(delegation), secretKey, domainSeparator);
+        BLS.G2Point memory signature =
+            BLS.sign(abi.encode(delegation), secretKey, registry.DELEGATION_DOMAIN_SEPARATOR());
         return ISlasher.SignedDelegation({ delegation: delegation, signature: signature });
     }
 
     struct RegisterAndDelegateParams {
         uint256 proposerSecretKey;
         uint256 collateral;
-        address withdrawalAddress;
+        address owner;
         uint256 delegateSecretKey;
+        uint256 committerSecretKey;
+        address committer;
         address slasher;
-        bytes domainSeparator;
         bytes metadata;
-        uint64 validUntil;
+        uint64 slot;
     }
 
     struct RegisterAndDelegateResult {
@@ -188,48 +192,60 @@ contract UnitTestHelper is Test {
     {
         // Single registration
         (result.registrationRoot, result.registrations) =
-            basicRegistration(params.proposerSecretKey, params.collateral, params.withdrawalAddress);
+            basicRegistration(params.proposerSecretKey, params.collateral, params.owner);
 
         // Sign delegation
         ISlasher.Delegation memory delegation = ISlasher.Delegation({
-            proposerPubKey: BLS.toPublicKey(params.proposerSecretKey),
-            delegatePubKey: BLS.toPublicKey(params.delegateSecretKey),
-            slasher: params.slasher,
-            validUntil: params.validUntil,
+            proposer: BLS.toPublicKey(params.proposerSecretKey),
+            delegate: BLS.toPublicKey(params.delegateSecretKey),
+            committer: params.committer,
+            slot: params.slot,
             metadata: params.metadata
         });
 
-        result.signedDelegation = signDelegation(params.proposerSecretKey, delegation, params.domainSeparator);
+        result.signedDelegation = signDelegation(params.proposerSecretKey, delegation);
     }
 
     function registerAndDelegateReentrant(RegisterAndDelegateParams memory params)
         public
         returns (RegisterAndDelegateResult memory result, address reentrantContractAddress)
     {
-        ReentrantSlashCommitment reentrantContract = new ReentrantSlashCommitment(address(registry));
+        ReentrantSlashEquivocation reentrantContract = new ReentrantSlashEquivocation(address(registry));
 
-        (uint16 unregistrationDelay,) = _setupBasicRegistrationParams();
-        result.registrations = _setupSingleRegistration(SECRET_KEY_1, address(reentrantContract), unregistrationDelay);
+        result.registrations = _setupSingleRegistration(SECRET_KEY_1, address(reentrantContract));
 
         // register via reentrant contract
         vm.deal(address(reentrantContract), 100 ether);
-        reentrantContract.register(result.registrations, unregistrationDelay);
+        reentrantContract.register(result.registrations);
         result.registrationRoot = reentrantContract.registrationRoot();
         reentrantContractAddress = address(reentrantContract);
 
         // Sign delegation
         ISlasher.Delegation memory delegation = ISlasher.Delegation({
-            proposerPubKey: BLS.toPublicKey(params.proposerSecretKey),
-            delegatePubKey: BLS.toPublicKey(params.delegateSecretKey),
-            slasher: params.slasher,
-            validUntil: params.validUntil,
+            proposer: BLS.toPublicKey(params.proposerSecretKey),
+            delegate: BLS.toPublicKey(params.delegateSecretKey),
+            committer: params.committer,
+            slot: params.slot,
             metadata: params.metadata
         });
 
-        result.signedDelegation = signDelegation(params.proposerSecretKey, delegation, params.domainSeparator);
+        result.signedDelegation = signDelegation(params.proposerSecretKey, delegation);
+
+        // Sign a second delegation to equivocate
+        ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
+            proposer: BLS.toPublicKey(params.proposerSecretKey),
+            delegate: BLS.toPublicKey(params.delegateSecretKey),
+            committer: params.committer,
+            slot: params.slot,
+            metadata: "different metadata"
+        });
+        ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
+
+        ISlasher.SignedCommitment memory signedCommitment =
+            basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // save info for later reentrancy
-        reentrantContract.saveResult(params, result);
+        reentrantContract.saveResult(params, result, signedCommitment, signedDelegationTwo);
     }
 }
 
@@ -248,19 +264,26 @@ contract ReentrantContract {
     IRegistry.Registration[1] registrations;
     uint16 unregistrationDelay;
 
+    ISlasher.SignedCommitment signedCommitment;
+    ISlasher.SignedDelegation signedDelegationTwo;
+
     constructor(address registryAddress) {
         registry = IRegistry(registryAddress);
     }
 
     function saveResult(
         UnitTestHelper.RegisterAndDelegateParams memory _params,
-        UnitTestHelper.RegisterAndDelegateResult memory _result
+        UnitTestHelper.RegisterAndDelegateResult memory _result,
+        ISlasher.SignedCommitment memory _signedCommitment,
+        ISlasher.SignedDelegation memory _signedDelegationTwo
     ) public {
         params = _params;
         signedDelegation = _result.signedDelegation;
         for (uint256 i = 0; i < _result.registrations.length; i++) {
             registrations[i] = _result.registrations[i];
         }
+        signedCommitment = _signedCommitment;
+        signedDelegationTwo = _signedDelegationTwo;
     }
 
     function _hashToLeaves(IRegistry.Registration[] memory _registrations) internal pure returns (bytes32[] memory) {
@@ -271,11 +294,10 @@ contract ReentrantContract {
         return leaves;
     }
 
-    function register(IRegistry.Registration[] memory _registrations, uint16 _unregistrationDelay) public {
+    function register(IRegistry.Registration[] memory _registrations) public {
         require(_registrations.length == 1, "test harness supports only 1 registration");
         registrations[0] = _registrations[0];
-        unregistrationDelay = _unregistrationDelay;
-        registrationRoot = registry.register{ value: collateral }(_registrations, address(this), _unregistrationDelay);
+        registrationRoot = registry.register{ value: collateral }(_registrations, address(this));
     }
 
     function unregister() public {
@@ -350,7 +372,7 @@ contract ReentrantSlashableRegistrationContract is ReentrantContract {
         IRegistry.Registration[] memory _registrations = new IRegistry.Registration[](1);
         _registrations[0] = registrations[0];
         require(_registrations.length == 1, "test harness supports only 1 registration");
-        register(_registrations, unregistrationDelay);
+        register(_registrations);
 
         require(registrationRoot == oldRegistrationRoot, "registration root should not change");
 
@@ -360,13 +382,14 @@ contract ReentrantSlashableRegistrationContract is ReentrantContract {
 }
 
 /// @dev A contract that attempts to add collateral, unregister, claim collateral, and slash commitment via reentrancy
-contract ReentrantSlashCommitment is ReentrantContract {
+contract ReentrantSlashEquivocation is ReentrantContract {
     constructor(address registryAddress) ReentrantContract(registryAddress) { }
 
     receive() external payable {
         try registry.addCollateral{ value: msg.value }(registrationRoot) {
             revert("should not be able to add collateral");
         } catch (bytes memory _reason) {
+            revert("should not be able to add collateral");
             errors += 1;
         }
 
@@ -385,15 +408,14 @@ contract ReentrantSlashCommitment is ReentrantContract {
         // Setup proof
         IRegistry.Registration[] memory _registrations = new IRegistry.Registration[](1);
         _registrations[0] = registrations[0];
-        bytes32[] memory leaves = _hashToLeaves(_registrations);
         uint256 leafIndex = 0;
         bytes32[] memory proof; // empty for single leaf
         bytes memory evidence;
 
-        try registry.slashCommitment(
-            registrationRoot, signedDelegation.signature, proof, leafIndex, signedDelegation, evidence
+        try registry.slashEquivocation(
+            registrationRoot, signedDelegation.signature, proof, leafIndex, signedDelegation, signedDelegationTwo
         ) {
-            revert("should not be able to slash commitment again");
+            revert("should not be able to slash equivocation again");
         } catch (bytes memory _reason) {
             errors += 1;
         }

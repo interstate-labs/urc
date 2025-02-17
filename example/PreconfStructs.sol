@@ -26,7 +26,7 @@ interface PreconfStructs {
         uint256 challengeTimestamp;
     }
 
-    struct SignedCommitment {
+    struct TransactionCommitment {
         uint64 slot;
         bytes signature;
         bytes signedTx;

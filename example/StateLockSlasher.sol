@@ -23,7 +23,6 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
     using EnumerableSet for EnumerableSet.Bytes32Set;
 
     uint256 public SLASH_AMOUNT_GWEI;
-    uint256 public REWARD_AMOUNT_GWEI;
     address public constant BEACON_ROOTS_CONTRACT =
         0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
     uint256 public constant EIP4788_WINDOW = 8191;
@@ -32,9 +31,8 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
     uint256 public constant SLOT_TIME = 12;
     uint256 public ETH2_GENESIS_TIMESTAMP;
 
-    constructor(uint256 _slashAmountGwei, uint256 _rewardAmountGwei) {
+    constructor(uint256 _slashAmountGwei) {
         SLASH_AMOUNT_GWEI = _slashAmountGwei;
-        REWARD_AMOUNT_GWEI = _rewardAmountGwei;
 
         if (block.chainid == 17000) {
             // Holesky
@@ -50,45 +48,48 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
 
     function slash(
         ISlasher.Delegation calldata delegation,
+        ISlasher.Commitment calldata commitment,
         bytes calldata evidence,
         address challenger
-    ) external returns (uint256 slashAmountGwei, uint256 rewardAmountGwei) {
-        // Operator delegated to an ECDSA signer as part of the metadata field
-        address commitmentSigner = abi.decode(delegation.metadata, (address));
-
+    ) external returns (uint256 slashAmountGwei) {
         // Recover the slashing evidence
         // commitment: signature to EXCLUDE a tx
         // proof: MPT inclusion proof
-        (
-            SignedCommitment memory commitment,
-            InclusionProof memory proof
-        ) = abi.decode(
-                evidence,
-                (SignedCommitment, InclusionProof)
-            );
-        
+        TransactionCommitment memory txCommitment = abi.decode(
+            commitment.payload,
+            (TransactionCommitment)
+        );
+
+        InclusionProof memory proof = abi.decode(
+            evidence,
+            (InclusionProof)
+        );
+
         // Check if the delegation applies to the slot of the commitment
-        if (delegation.validUntil < commitment.slot) {
+        if (delegation.slot != txCommitment.slot) {
             revert DelegationExpired();
         }
 
         // If the inclusion proof is valid (doesn't revert) they should be slashed for not excluding the transaction
-        _verifyInclusionProof(commitment, proof, commitmentSigner);
+        _verifyInclusionProof(txCommitment, proof, delegation.committer);
 
         // Return the slash amount to the URC slasher
         slashAmountGwei = SLASH_AMOUNT_GWEI;
-        rewardAmountGwei = REWARD_AMOUNT_GWEI;
     }
 
-    function DOMAIN_SEPARATOR() external view returns (bytes memory) {
-        return "0xeeeeeeee";
+    function slashFromOptIn(
+        ISlasher.Commitment calldata commitment,
+        bytes calldata evidence,
+        address challenger
+    ) external returns (uint256 slashAmountGwei) {
+        // unused in this example
     }
 
     function _verifyInclusionProof(
-        SignedCommitment memory commitment,
+        TransactionCommitment memory commitment,
         InclusionProof memory proof,
-        address commitmentSigner
-    ) internal {
+        address commitmentsKey
+    ) internal view {
         uint256 targetSlot = commitment.slot;
         if (targetSlot > _getCurrentSlot() - JUSTIFICATION_DELAY) {
             // We cannot open challenges for slots that are not finalized by Ethereum consensus yet.
@@ -131,7 +132,7 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
         ) = _recoverCommitmentData(commitment);
 
         // check that the commitment was signed by the expected signer
-        if (commitmentSigner != recoveredCommitmentSigner) {
+        if (commitmentsKey != recoveredCommitmentSigner) {
             revert UnexpectedSigner();
         }
 
@@ -141,8 +142,8 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
         // committed transaction. By checking against the previous block's parent hash we can ensure this
         // is the correct block trusting a single block hash.
         BlockHeaderData memory targetBlockHeader = _decodeBlockHeaderRLP(
-                proof.inclusionBlockHeaderRLP
-            );
+            proof.inclusionBlockHeaderRLP
+        );
 
         // Check that the target block is a child of the previous block
         if (targetBlockHeader.parentHash != previousBlockHash) {
@@ -179,7 +180,7 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
     /// @return commitmentSigner The signer of the commitment.
     /// @return transactionData The decoded transaction data of the committed transaction.
     function _recoverCommitmentData(
-        SignedCommitment memory commitment
+        TransactionCommitment memory commitment
     )
         internal
         pure
@@ -207,7 +208,7 @@ contract StateLockSlasher is ISlasher, PreconfStructs {
     /// @param commitment The signed commitment to compute the ID for.
     /// @return commitmentID The computed commitment ID.
     function _computeCommitmentID(
-        SignedCommitment memory commitment
+        TransactionCommitment memory commitment
     ) internal pure returns (bytes32) {
         return
             keccak256(

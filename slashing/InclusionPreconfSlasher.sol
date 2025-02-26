@@ -35,6 +35,14 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
     address public urc;
     mapping(bytes32 challengeID => Challenge challenge) public challenges;
 
+    event OperatorSlashed(
+    address indexed committer,
+    bytes32 indexed challengeID,
+    uint256 slashAmountGwei,
+    address challenger,
+    uint256 timestamp
+);
+
     constructor(uint256 _slashAmountGwei, address _urc) {
         SLASH_AMOUNT_GWEI = _slashAmountGwei;
         urc = _urc;
@@ -155,7 +163,14 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
         // Return the slash amount to the URC slasher
         slashAmountGwei = SLASH_AMOUNT_GWEI;
 
-        // ToDo emit slash event
+   // Emit the slash event with relevant information
+    emit OperatorSlashed(
+        delegation.committer,
+        challengeID,
+        slashAmountGwei,
+        challenger,
+        block.timestamp
+    );
     }
 
     function slashFromOptIn(

@@ -1,3 +1,5 @@
+All interstate changes are in the README.md and the `/slasher` folder which has been renamed from `/example` all other files are the same as source: https://github.com/eth-fabric/urc/blob/main/src/Registry.sol
+
 # Universal Registry Contract
 
 **These standards are currently under review / feedback and are not audited.**

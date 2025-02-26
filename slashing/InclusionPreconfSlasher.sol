@@ -154,6 +154,8 @@ contract InclusionPreconfSlasher is ISlasher, PreconfStructs {
 
         // Return the slash amount to the URC slasher
         slashAmountGwei = SLASH_AMOUNT_GWEI;
+
+        // ToDo emit slash event
     }
 
     function slashFromOptIn(

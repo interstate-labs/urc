@@ -53,8 +53,13 @@ contract TxnVerifier is IDSS {
         _;
     }
 
-        modifier senderIsOperator(address operator) {
+     modifier senderIsOperator(address operator) {
         if (tx.origin != operator) revert SenderNotOperator();
+        _;
+    }
+
+       modifier onlyCore() {
+        require(msg.sender == address(core), "Not Core");
         _;
     }
     
@@ -137,11 +142,11 @@ contract TxnVerifier is IDSS {
             interfaceID == IDSS.unregistrationHook.selector);
     }
     
-    function registerToCore(uint256 slashablePercentage) external {
+    function registerToCore(uint256 slashablePercentage) onlyCore external {
         core.registerDSS(slashablePercentage);
     }
     
-  function registrationHook(address operator, bytes memory extraData) external senderIsOperator(operator) {
+  function registrationHook(address operator, bytes memory extraData) external  onlyCore senderIsOperator(operator) {
         extraData = extraData;
         if (operatorExists[operator]) revert OperatorAlreadyRegistered();
         operatorAddresses.push(operator);
@@ -150,7 +155,7 @@ contract TxnVerifier is IDSS {
 
 
     
-    function unregistrationHook(address operator, bytes memory extraData) external senderIsOperator(operator) {
+    function unregistrationHook(address operator, bytes memory extraData) external onlyCore senderIsOperator(operator) {
         uint256 index = abi.decode(extraData, (uint256));
         if (operator != operatorAddresses[index]) revert OperatorAndIndexDontMatch();
         if (!operatorExists[operator]) revert OperatorIsNotRegistered();

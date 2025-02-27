@@ -23,6 +23,7 @@ contract TxnVerifier is IDSS {
     mapping(bytes32 => bool) public taskCompleted;
     // Aggregator address
     address public aggregator;
+    address public owner;
     ICore core;
     
 
@@ -62,10 +63,17 @@ contract TxnVerifier is IDSS {
         require(msg.sender == address(core), "Not Core");
         _;
     }
+
+    modifier onlyOwner(){
+            require(msg.sender == address(owner), "Not Owner");
+        _;
+
+    }
     
-    constructor(address _aggregator, ICore _core) {
+    constructor(address _aggregator, ICore _core,address _owner) {
         aggregator = _aggregator;
         core = _core;
+        owner=_owner
     }
     
     /* ======= External Functions ======= */
@@ -142,7 +150,7 @@ contract TxnVerifier is IDSS {
             interfaceID == IDSS.unregistrationHook.selector);
     }
     
-    function registerToCore(uint256 slashablePercentage) onlyCore external {
+    function registerToCore(uint256 slashablePercentage) owner external {
         core.registerDSS(slashablePercentage);
     }
     

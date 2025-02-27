@@ -155,14 +155,19 @@ contract TxnVerifier is IDSS {
 
 
     
-    function unregistrationHook(address operator, bytes memory extraData) external onlyCore senderIsOperator(operator) {
-        uint256 index = abi.decode(extraData, (uint256));
-        if (operator != operatorAddresses[index]) revert OperatorAndIndexDontMatch();
-        if (!operatorExists[operator]) revert OperatorIsNotRegistered();
-        uint256 operatorAddressesLength = operatorAddresses.length;
-        operatorAddresses[index] = operatorAddresses[operatorAddressesLength - 1];
-        operatorAddresses.pop();
-        operatorExists[operator] = false;
+    function unregistrationHook(address operator) external onlyCore senderIsOperator(operator) {
+    uint256 operatorAddressesLength = operatorAddresses.length;
+    for (uint256 i = 0; i < operatorAddressesLength; i++) {
+        if (operatorAddresses[i] == operator) {
+            // Swap and pop pattern to remove the operator
+            operatorAddresses[i] = operatorAddresses[operatorAddressesLength - 1];
+            operatorAddresses.pop();
+            break;
+        }
+    }
+    
+    // Update the mapping regardless of whether operator was found
+    operatorExists[operator] = false;
     }
 
     

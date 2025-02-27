@@ -150,7 +150,7 @@ contract TxnVerifier is IDSS {
             interfaceID == IDSS.unregistrationHook.selector);
     }
     
-    function registerToCore(uint256 slashablePercentage) owner external {
+    function registerToCore(uint256 slashablePercentage) onlyOwner external {
         core.registerDSS(slashablePercentage);
     }
     

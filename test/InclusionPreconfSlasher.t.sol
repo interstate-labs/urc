@@ -7,19 +7,19 @@ import { console } from "forge-std/Test.sol";
 
 import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-import { RLPReader } from "../example/lib/rlp/RLPReader.sol";
-import { RLPWriter } from "../example/lib/rlp/RLPWriter.sol";
-import { BytesUtils } from "../example/lib/BytesUtils.sol";
-import { MerkleTrie } from "../example/lib/trie/MerkleTrie.sol";
-import { SecureMerkleTrie } from "../example/lib/trie/SecureMerkleTrie.sol";
-import { TransactionDecoder } from "../example/lib/TransactionDecoder.sol";
+import { RLPReader } from "../slashing/lib/rlp/RLPReader.sol";
+import { RLPWriter } from "../slashing/lib/rlp/RLPWriter.sol";
+import { BytesUtils } from "../slashing/lib/BytesUtils.sol";
+import { MerkleTrie } from "../slashing/lib/trie/MerkleTrie.sol";
+import { SecureMerkleTrie } from "../slashing/lib/trie/SecureMerkleTrie.sol";
+import { TransactionDecoder } from "../slashing/lib/TransactionDecoder.sol";
 import { Registry } from "../src/Registry.sol";
 import { IRegistry } from "../src/IRegistry.sol";
 import { ISlasher } from "../src/ISlasher.sol";
 import { BLS } from "../src/lib/BLS.sol";
 import { MerkleTree } from "../src/lib/MerkleTree.sol";
-import { PreconfStructs } from "../example/PreconfStructs.sol";
-import { InclusionPreconfSlasher } from "../example/InclusionPreconfSlasher.sol";
+import { PreconfStructs } from "../slashing/PreconfStructs.sol";
+import { InclusionPreconfSlasher } from "../slashing/InclusionPreconfSlasher.sol";
 import { UnitTestHelper } from "./UnitTestHelper.sol";
 
 contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {

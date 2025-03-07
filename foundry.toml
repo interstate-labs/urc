@@ -27,5 +27,5 @@ remappings = [
 ]
 
 [rpc_endpoints]
-mainnet = "${ETH_RPC_URL}"
-holesky = "${ETH_RPC_URL_HOLESKY}"
+mainnet ="https://green-cold-field.quiknode.pro/6cf9c5dcc0f6f4ce2aac712a6c0db86b035a22e4"
+holesky ="https://green-cold-field.ethereum-holesky.quiknode.pro/6cf9c5dcc0f6f4ce2aac712a6c0db86b035a22e4"

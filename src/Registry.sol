@@ -17,6 +17,9 @@ contract Registry is IRegistry {
     /// @notice Mapping to track if a slashing has occurred before with same input
     mapping(bytes32 slashingDigest => bool) public slashedBefore;
 
+    /// @notice Mapping to track pending slash refunds
+    mapping(address => uint256) public pendingSlashRefunds;
+
     // Constants
     uint256 public constant MIN_COLLATERAL = 0.1 ether;
     uint256 public constant UNREGISTRATION_DELAY = 7200; // 1 day
@@ -26,6 +29,13 @@ contract Registry is IRegistry {
     address internal constant BURNER_ADDRESS = address(0x0000000000000000000000000000000000000000);
     bytes public constant REGISTRATION_DOMAIN_SEPARATOR = "0x00435255"; // "URC" in little endian
     bytes public constant DELEGATION_DOMAIN_SEPARATOR = "0x0044656c"; // "Del" in little endian
+
+    // New error
+    error NoRefundToClaim();
+    error TooEarlyToUnregister();
+
+    // Add minimum registration time constant
+    uint256 public constant MIN_REGISTRATION_PERIOD = 1800; // 6 hours
 
     /**
      *
@@ -102,8 +112,12 @@ contract Registry is IRegistry {
             revert AlreadyUnregistered();
         }
 
+        // Add minimum time before allowing unregistration
+        if (block.number < operator.registeredAt + MIN_REGISTRATION_PERIOD) {
+            revert TooEarlyToUnregister();
+        }
+
         // Prevent a slashed operator from unregistering
-        // They must wait for the slash window to pass before calling claimSlashedCollateral()
         if (operator.slashedAt != 0) {
             revert SlashingAlreadyOccurred();
         }
@@ -245,7 +259,7 @@ contract Registry is IRegistry {
         // Delete the operator, they must re-register to continue
         delete registrations[registrationRoot];
 
-        // Calculate the amount to transfer to challenger and return to owner
+        // Calculate the amount to transfer to challenger and store for owner
         uint256 remainingWei = uint256(collateralGwei) * 1 gwei - MIN_COLLATERAL;
 
         // Transfer to the challenger
@@ -254,15 +268,13 @@ contract Registry is IRegistry {
             revert EthTransferFailed();
         }
 
-        // Return any remaining funds to owner
-        (success,) = owner.call{ value: remainingWei }("");
-        if (!success) {
-            revert EthTransferFailed();
+        // Store remaining funds for owner to withdraw later
+        if (remainingWei > 0) {
+            pendingSlashRefunds[owner] += remainingWei;
         }
 
         emit OperatorSlashed(SlashingType.Fraud, registrationRoot, owner, msg.sender, address(this), MIN_COLLATERAL);
 
-        // Return a value for the caller to use
         return MIN_COLLATERAL;
     }
 
@@ -819,4 +831,26 @@ contract Registry is IRegistry {
             revert EthTransferFailed();
         }
     }
+
+    // Add new function for withdrawing refunds
+    function withdrawSlashRefund() external {
+        uint256 refundAmount = pendingSlashRefunds[msg.sender];
+        if (refundAmount == 0) {
+            revert NoRefundToClaim();
+        }
+
+        // Clear refund before transfer to prevent reentrancy
+        pendingSlashRefunds[msg.sender] = 0;
+
+        // Transfer the refund
+        (bool success,) = msg.sender.call{ value: refundAmount }("");
+        if (!success) {
+            revert EthTransferFailed();
+        }
+
+        emit SlashRefundClaimed(msg.sender, refundAmount);
+    }
+
+    // Add new event at contract level with other events
+    event SlashRefundClaimed(address indexed owner, uint256 amount);
 }

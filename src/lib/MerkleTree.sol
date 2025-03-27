@@ -30,10 +30,10 @@ library MerkleTree {
         for (uint256 i = 0; i < leaves.length; i++) {
             nodes[i] = leaves[i];
         }
-        // Fill remaining nodes with zero
-        for (uint256 i = leaves.length; i < _nextPowerOfTwo; i++) {
-            nodes[i] = bytes32(0);
-        }
+        // // Fill remaining nodes with zero
+        // for (uint256 i = leaves.length; i < _nextPowerOfTwo; i++) {
+        //     nodes[i] = bytes32(0);
+        // }
 
         // Build up the tree
         uint256 n = _nextPowerOfTwo;

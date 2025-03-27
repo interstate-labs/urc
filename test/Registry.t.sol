@@ -44,9 +44,7 @@ contract RegisterTester is UnitTestHelper {
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
-        _assertRegistration(
-            registrationRoot, operator, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
-        );
+        _assertRegistration(registrationRoot, operator, uint80(collateral), uint48(block.number), type(uint48).max, 0);
 
         // Attempt duplicate registration
         vm.expectRevert(IRegistry.OperatorAlreadyRegistered.selector);
@@ -62,9 +60,7 @@ contract RegisterTester is UnitTestHelper {
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
-        _assertRegistration(
-            registrationRoot, operator, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
-        );
+        _assertRegistration(registrationRoot, operator, uint80(collateral), uint48(block.number), type(uint48).max, 0);
 
         // generate merkle proof
         bytes32[] memory leaves = _hashToLeaves(registrations);
@@ -76,7 +72,7 @@ contract RegisterTester is UnitTestHelper {
             proof,
             0 // leafIndex
         );
-        assertEq(gotCollateral, uint56(collateral / 1 gwei), "Wrong collateral amount");
+        assertEq(gotCollateral, uint80(collateral), "Wrong collateral amount");
     }
 
     function test_verifyMerkleProofHeight2() public {
@@ -90,9 +86,7 @@ contract RegisterTester is UnitTestHelper {
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
-        _assertRegistration(
-            registrationRoot, operator, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
-        );
+        _assertRegistration(registrationRoot, operator, uint80(collateral), uint48(block.number), type(uint48).max, 0);
 
         bytes32[] memory leaves = _hashToLeaves(registrations);
 
@@ -100,13 +94,13 @@ contract RegisterTester is UnitTestHelper {
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
         uint256 gotCollateral = registry.verifyMerkleProof(registrationRoot, leaves[0], proof, leafIndex);
-        assertEq(gotCollateral, uint56(collateral / 1 gwei), "Wrong collateral amount");
+        assertEq(gotCollateral, uint80(collateral), "Wrong collateral amount");
 
         // Test second proof path
         leafIndex = 1;
         proof = MerkleTree.generateProof(leaves, leafIndex);
         gotCollateral = registry.verifyMerkleProof(registrationRoot, leaves[1], proof, leafIndex);
-        assertEq(gotCollateral, uint56(collateral / 1 gwei), "Wrong collateral amount");
+        assertEq(gotCollateral, uint80(collateral), "Wrong collateral amount");
     }
 
     function test_verifyMerkleProofHeight3() public {
@@ -122,9 +116,7 @@ contract RegisterTester is UnitTestHelper {
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
-        _assertRegistration(
-            registrationRoot, operator, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
-        );
+        _assertRegistration(registrationRoot, operator, uint80(collateral), uint48(block.number), type(uint48).max, 0);
 
         bytes32[] memory leaves = _hashToLeaves(registrations);
 
@@ -132,7 +124,7 @@ contract RegisterTester is UnitTestHelper {
         for (uint256 i = 0; i < leaves.length; i++) {
             bytes32[] memory proof = MerkleTree.generateProof(leaves, i);
             uint256 gotCollateral = registry.verifyMerkleProof(registrationRoot, leaves[i], proof, i);
-            assertEq(gotCollateral, uint56(collateral / 1 gwei), "Wrong collateral amount");
+            assertEq(gotCollateral, uint80(collateral), "Wrong collateral amount");
         }
     }
 
@@ -154,7 +146,7 @@ contract RegisterTester is UnitTestHelper {
         for (uint256 i = 0; i < leaves.length; i++) {
             bytes32[] memory proof = MerkleTree.generateProof(leaves, i);
             uint256 gotCollateral = registry.verifyMerkleProof(registrationRoot, leaves[i], proof, i);
-            assertEq(gotCollateral, uint56(collateral / 1 gwei), "Wrong collateral amount");
+            assertEq(gotCollateral, uint80(collateral), "Wrong collateral amount");
         }
     }
 }
@@ -178,12 +170,12 @@ contract UnregisterTester is UnitTestHelper {
 
         vm.startPrank(operator);
         vm.expectEmit(address(registry));
-        emit IRegistry.OperatorUnregistered(registrationRoot, uint32(block.number));
+        emit IRegistry.OperatorUnregistered(registrationRoot, uint48(block.number));
         registry.unregister(registrationRoot);
 
         OperatorData memory operatorData = getRegistrationData(registrationRoot);
-        assertEq(operatorData.unregisteredAt, uint32(block.number), "Wrong unregistration block");
-        assertEq(operatorData.registeredAt, uint32(block.number), "Wrong registration block"); // Should remain unchanged
+        assertEq(operatorData.unregisteredAt, uint48(block.number), "Wrong unregistration block");
+        assertEq(operatorData.registeredAt, uint48(block.number), "Wrong registration block"); // Should remain unchanged
     }
 
     function test_unregister_wrongOperator() public {
@@ -360,7 +352,7 @@ contract ClaimCollateralTester is UnitTestHelper {
 
         vm.startPrank(operator);
         vm.expectEmit(address(registry));
-        emit IRegistry.CollateralClaimed(registrationRoot, uint256(collateral / 1 gwei));
+        emit IRegistry.CollateralClaimed(registrationRoot, uint256(collateral));
         registry.claimCollateral(registrationRoot);
 
         assertEq(operator.balance, balanceBefore + collateral, "Collateral not returned");
@@ -435,22 +427,22 @@ contract AddCollateralTester is UnitTestHelper {
 
     function test_addCollateral(uint56 addAmount) public {
         uint256 collateral = registry.MIN_COLLATERAL();
-        vm.assume((addAmount + collateral) / 1 gwei < uint256(2 ** 56));
+        vm.assume((addAmount + collateral) < uint256(2 ** 80));
 
         IRegistry.Registration[] memory registrations = _setupSingleRegistration(SECRET_KEY_1, operator);
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
-        uint256 expectedCollateralGwei = (collateral + addAmount) / 1 gwei;
+        uint256 expectedCollateralWei = collateral + addAmount;
         vm.deal(operator, addAmount);
         vm.startPrank(operator);
 
         vm.expectEmit(address(registry));
-        emit IRegistry.CollateralAdded(registrationRoot, expectedCollateralGwei);
+        emit IRegistry.CollateralAdded(registrationRoot, expectedCollateralWei);
         registry.addCollateral{ value: addAmount }(registrationRoot);
 
         OperatorData memory operatorData = getRegistrationData(registrationRoot);
-        assertEq(operatorData.collateralGwei, expectedCollateralGwei, "Collateral not added");
+        assertEq(operatorData.collateralWei, expectedCollateralWei, "Collateral not added");
     }
 
     function test_addCollateral_overflow() public {
@@ -460,7 +452,7 @@ contract AddCollateralTester is UnitTestHelper {
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
-        uint256 addAmount = 2 ** 56 * 1 gwei; // overflow uint56
+        uint256 addAmount = 2 ** 80; // overflow uint80
         vm.deal(operator, addAmount);
         vm.startPrank(operator);
 
@@ -468,7 +460,7 @@ contract AddCollateralTester is UnitTestHelper {
         registry.addCollateral{ value: addAmount }(registrationRoot);
 
         OperatorData memory operatorData = getRegistrationData(registrationRoot);
-        assertEq(operatorData.collateralGwei, uint56(collateral / 1 gwei), "Collateral should not be changed");
+        assertEq(operatorData.collateralWei, uint80(collateral), "Collateral should not be changed");
     }
 
     function test_addCollateral_notRegistered() public {
@@ -502,9 +494,7 @@ contract SlashRegistrationTester is UnitTestHelper {
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
-        _assertRegistration(
-            registrationRoot, operator, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
-        );
+        _assertRegistration(registrationRoot, operator, uint80(collateral), uint48(block.number), type(uint48).max, 0);
 
         // generate merkle proof
         bytes32[] memory leaves = _hashToLeaves(registrations);
@@ -551,9 +541,9 @@ contract SlashRegistrationTester is UnitTestHelper {
         _assertRegistration(
             registrationRoot,
             thief, // confirm thief's address is what was registered
-            uint56(collateral / 1 gwei),
-            uint32(block.number),
-            type(uint32).max,
+            uint80(collateral),
+            uint48(block.number),
+            type(uint48).max,
             0
         );
 
@@ -602,9 +592,7 @@ contract SlashRegistrationTester is UnitTestHelper {
         );
 
         // Verify initial registration state
-        _assertRegistration(
-            registrationRoot, thief, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
-        );
+        _assertRegistration(registrationRoot, thief, uint80(collateral), uint48(block.number), type(uint48).max, 0);
 
         // Create proof for operator's registration
         bytes32[] memory leaves = _hashToLeaves(registrations);
@@ -709,7 +697,7 @@ contract RentrancyTester is UnitTestHelper {
 
         vm.prank(address(reentrantContract));
         vm.expectEmit(address(registry));
-        emit IRegistry.CollateralClaimed(reentrantContract.registrationRoot(), reentrantContract.collateral() / 1 gwei);
+        emit IRegistry.CollateralClaimed(reentrantContract.registrationRoot(), reentrantContract.collateral());
 
         // initiate reentrancy
         reentrantContract.claimCollateral();
@@ -735,7 +723,6 @@ contract RentrancyTester is UnitTestHelper {
             new ReentrantSlashableRegistrationContract(address(registry));
         vm.deal(address(reentrantContract), 1000 ether);
 
-        uint256 collateral = registry.MIN_COLLATERAL();
         IRegistry.Registration[] memory registrations = new IRegistry.Registration[](1);
 
         registrations[0] = _createRegistration(SECRET_KEY_1, operator);
@@ -746,9 +733,9 @@ contract RentrancyTester is UnitTestHelper {
         _assertRegistration(
             reentrantContract.registrationRoot(),
             address(reentrantContract),
-            uint56(reentrantContract.collateral() / 1 gwei),
-            uint32(block.number),
-            type(uint32).max,
+            uint80(reentrantContract.collateral()),
+            uint48(block.number),
+            type(uint48).max,
             0
         );
 

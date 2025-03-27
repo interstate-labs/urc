@@ -25,16 +25,16 @@ interface IRegistry {
     struct Operator {
         /// The authorized address of the operator
         address owner;
-        /// ETH collateral in GWEI
-        uint56 collateralGwei;
-        /// The number of keys registered per operator (capped at 255)
-        uint8 numKeys;
+        /// ETH collateral in WEI
+        uint80 collateralWei;
+        /// The number of keys registered per operator
+        uint16 numKeys;
         /// The block number when registration occurred
-        uint32 registeredAt;
+        uint48 registeredAt;
         /// The block number when deregistration occurred
-        uint32 unregisteredAt;
+        uint48 unregisteredAt;
         /// The block number when slashed from breaking a commitment
-        uint32 slashedAt;
+        uint48 slashedAt;
         /// Mapping to track opt-in and opt-out status for proposer commitment protocols
         mapping(address slasher => SlasherCommitment) slasherCommitments;
         /// Historical collateral records
@@ -54,7 +54,7 @@ interface IRegistry {
     /// @notice A record of collateral at a specific timestamp
     struct CollateralRecord {
         uint64 timestamp;
-        uint56 collateralValue;
+        uint80 collateralValue;
     }
 
     enum SlashingType {
@@ -72,9 +72,9 @@ interface IRegistry {
      */
     /// @notice Emitted when an operator is registered
     /// @param registrationRoot The merkle root of the registration merkle tree
-    /// @param collateralGwei The collateral amount in GWEI
+    /// @param collateralWei The collateral amount in WEI
     /// @param owner The owner of the operator
-    event OperatorRegistered(bytes32 indexed registrationRoot, uint256 collateralGwei, address owner);
+    event OperatorRegistered(bytes32 indexed registrationRoot, uint256 collateralWei, address owner);
 
     /// @notice Emitted when an operator is slashed for fraud, equivocation, or breaking a commitment
     /// @param registrationRoot The merkle root of the registration merkle tree
@@ -82,30 +82,30 @@ interface IRegistry {
     /// @param challenger The address of the challenger
     /// @param slashingType The type of slashing
     /// @param slasher The address of the slasher
-    /// @param slashAmountGwei The amount of GWEI slashed
+    /// @param slashAmountWei The amount of WEI slashed
     event OperatorSlashed(
         SlashingType slashingType,
         bytes32 indexed registrationRoot,
         address owner,
         address challenger,
         address indexed slasher,
-        uint256 slashAmountGwei
+        uint256 slashAmountWei
     );
 
     /// @notice Emitted when an operator is unregistered
     /// @param registrationRoot The merkle root of the registration merkle tree
     /// @param unregisteredAt The block number when the operator was unregistered
-    event OperatorUnregistered(bytes32 indexed registrationRoot, uint32 unregisteredAt);
+    event OperatorUnregistered(bytes32 indexed registrationRoot, uint48 unregisteredAt);
 
     /// @notice Emitted when collateral is claimed
     /// @param registrationRoot The merkle root of the registration merkle tree
-    /// @param collateralGwei The amount of GWEI claimed
-    event CollateralClaimed(bytes32 indexed registrationRoot, uint256 collateralGwei);
+    /// @param collateralWei The amount of WEI claimed
+    event CollateralClaimed(bytes32 indexed registrationRoot, uint256 collateralWei);
 
     /// @notice Emitted when collateral is added
     /// @param registrationRoot The merkle root of the registration merkle tree
-    /// @param collateralGwei The amount of GWEI added
-    event CollateralAdded(bytes32 indexed registrationRoot, uint256 collateralGwei);
+    /// @param collateralWei The amount of WEI added
+    event CollateralAdded(bytes32 indexed registrationRoot, uint256 collateralWei);
 
     /// @notice Emitted when an operator is opted into a proposer commitment protocol
     /// @param registrationRoot The merkle root of the registration merkle tree
@@ -179,7 +179,7 @@ interface IRegistry {
         Registration calldata reg,
         bytes32[] calldata proof,
         uint256 leafIndex
-    ) external returns (uint256 collateral);
+    ) external returns (uint256 collateralWei);
 
     function slashCommitment(
         bytes32 registrationRoot,
@@ -189,13 +189,13 @@ interface IRegistry {
         ISlasher.SignedDelegation calldata delegation,
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
-    ) external returns (uint256 slashAmountGwei);
+    ) external returns (uint256 slashAmountWei);
 
     function slashCommitmentFromOptIn(
         bytes32 registrationRoot,
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
-    ) external returns (uint256 slashAmountGwei);
+    ) external returns (uint256 slashAmountWei);
 
     function slashEquivocation(
         bytes32 registrationRoot,
@@ -204,7 +204,7 @@ interface IRegistry {
         uint256 leafIndex,
         ISlasher.SignedDelegation calldata delegationOne,
         ISlasher.SignedDelegation calldata delegationTwo
-    ) external returns (uint256 slashAmountGwei);
+    ) external returns (uint256 slashAmountWei);
 
     function addCollateral(bytes32 registrationRoot) external payable;
 
@@ -215,7 +215,7 @@ interface IRegistry {
     function verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
         external
         view
-        returns (uint256 collateralGwei);
+        returns (uint256 collateralWei);
 
     function getSlasherCommitment(bytes32 registrationRoot, address slasher)
         external
@@ -230,5 +230,5 @@ interface IRegistry {
         bytes32[] calldata proof,
         uint256 leafIndex,
         address slasher
-    ) external view returns (SlasherCommitment memory slasherCommitment, uint256 collateralGwei);
+    ) external view returns (SlasherCommitment memory slasherCommitment, uint256 collateralWei);
 }

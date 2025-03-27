@@ -11,22 +11,22 @@ import { ISlasher } from "../src/ISlasher.sol";
 import { UnitTestHelper, IReentrantContract } from "./UnitTestHelper.sol";
 
 contract DummySlasher is ISlasher {
-    uint256 public SLASH_AMOUNT_GWEI = 1 ether / 1 gwei;
+    uint256 public SLASH_AMOUNT_WEI = 1 ether;
 
     function slash(
         ISlasher.Delegation calldata delegation,
         ISlasher.Commitment calldata commitment,
         bytes calldata evidence,
         address challenger
-    ) external returns (uint256 slashAmountGwei) {
-        slashAmountGwei = SLASH_AMOUNT_GWEI;
+    ) external returns (uint256 slashAmountWei) {
+        slashAmountWei = SLASH_AMOUNT_WEI;
     }
 
     function slashFromOptIn(ISlasher.Commitment calldata commitment, bytes calldata evidence, address challenger)
         external
-        returns (uint256 slashAmountGwei)
+        returns (uint256 slashAmountWei)
     {
-        slashAmountGwei = SLASH_AMOUNT_GWEI;
+        slashAmountWei = SLASH_AMOUNT_WEI;
     }
 }
 
@@ -84,10 +84,10 @@ contract SlashCommitmentTester is UnitTestHelper {
             operator,
             challenger,
             address(dummySlasher),
-            dummySlasher.SLASH_AMOUNT_GWEI()
+            dummySlasher.SLASH_AMOUNT_WEI()
         );
 
-        uint256 gotSlashAmountGwei = registry.slashCommitment(
+        uint256 gotSlashAmountWei = registry.slashCommitment(
             result.registrationRoot,
             result.registrations[leafIndex].signature,
             proof,
@@ -97,11 +97,9 @@ contract SlashCommitmentTester is UnitTestHelper {
             evidence
         );
 
-        assertEq(dummySlasher.SLASH_AMOUNT_GWEI(), gotSlashAmountGwei, "Slash amount incorrect");
+        assertEq(dummySlasher.SLASH_AMOUNT_WEI(), gotSlashAmountWei, "Slash amount incorrect");
 
-        _verifySlashCommitmentBalances(
-            challenger, gotSlashAmountGwei * 1 gwei, 0, challengerBalanceBefore, urcBalanceBefore
-        );
+        _verifySlashCommitmentBalances(challenger, gotSlashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 
         OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
@@ -109,9 +107,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
 
         // Verify operator's collateralGwei is decremented
-        assertEq(
-            operatorData.collateralGwei, collateral / 1 gwei - gotSlashAmountGwei, "collateralGwei not decremented"
-        );
+        assertEq(operatorData.collateralWei, collateral - gotSlashAmountWei, "collateralGwei not decremented");
 
         // Verify the slashedBefore mapping is set
         bytes32 slashingDigest =
@@ -234,7 +230,7 @@ contract SlashCommitmentTester is UnitTestHelper {
     function testRevertSlashAmountExceedsCollateral() public {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
-            collateral: dummySlasher.SLASH_AMOUNT_GWEI() * 1 gwei - 1, // less than the slash amount
+            collateral: dummySlasher.SLASH_AMOUNT_WEI() - 1, // less than the slash amount
             owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
@@ -345,14 +341,12 @@ contract SlashCommitmentTester is UnitTestHelper {
         // claim collateral
         vm.startPrank(operator);
         vm.expectEmit(address(registry));
-        emit IRegistry.CollateralClaimed(result.registrationRoot, operatorData.collateralGwei);
+        emit IRegistry.CollateralClaimed(result.registrationRoot, operatorData.collateralWei);
         registry.claimSlashedCollateral(result.registrationRoot);
 
         // verify operator's balance is increased
         assertEq(
-            operator.balance,
-            operatorCollateralBefore + uint256(operatorData.collateralGwei) * 1 gwei,
-            "operator did not claim collateral"
+            operator.balance, operatorCollateralBefore + operatorData.collateralWei, "operator did not claim collateral"
         );
 
         // verify operator was deleted
@@ -394,7 +388,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             operator,
             challenger,
             address(dummySlasher),
-            dummySlasher.SLASH_AMOUNT_GWEI()
+            dummySlasher.SLASH_AMOUNT_WEI()
         );
         registry.slashCommitment(
             result.registrationRoot,
@@ -415,7 +409,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             operator,
             challenger,
             address(dummySlasher),
-            dummySlasher.SLASH_AMOUNT_GWEI()
+            dummySlasher.SLASH_AMOUNT_WEI()
         );
         registry.slashCommitment(
             result.registrationRoot,
@@ -431,8 +425,8 @@ contract SlashCommitmentTester is UnitTestHelper {
 
         // verify operator's collateralGwei is decremented by 2 slashings
         assertEq(
-            operatorData.collateralGwei,
-            collateral / 1 gwei - 2 * dummySlasher.SLASH_AMOUNT_GWEI(),
+            operatorData.collateralWei,
+            collateral - 2 * dummySlasher.SLASH_AMOUNT_WEI(),
             "collateralGwei not decremented"
         );
     }
@@ -491,16 +485,14 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
             operator,
             challenger,
             address(dummySlasher),
-            dummySlasher.SLASH_AMOUNT_GWEI()
+            dummySlasher.SLASH_AMOUNT_WEI()
         );
 
-        uint256 gotSlashAmountGwei = registry.slashCommitmentFromOptIn(result.registrationRoot, signedCommitment, "");
+        uint256 gotSlashAmountWei = registry.slashCommitmentFromOptIn(result.registrationRoot, signedCommitment, "");
 
-        assertEq(dummySlasher.SLASH_AMOUNT_GWEI(), gotSlashAmountGwei, "Slash amount incorrect");
+        assertEq(dummySlasher.SLASH_AMOUNT_WEI(), gotSlashAmountWei, "Slash amount incorrect");
 
-        _verifySlashCommitmentBalances(
-            challenger, gotSlashAmountGwei * 1 gwei, 0, challengerBalanceBefore, urcBalanceBefore
-        );
+        _verifySlashCommitmentBalances(challenger, gotSlashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 
         OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
@@ -508,9 +500,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");
 
         // Verify operator's collateralGwei is decremented
-        assertEq(
-            operatorData.collateralGwei, collateral / 1 gwei - gotSlashAmountGwei, "collateralGwei not decremented"
-        );
+        assertEq(operatorData.collateralWei, collateral - gotSlashAmountWei, "collateralWei not decremented");
 
         // Verify the SlasherCommitment mapping is cleared
         IRegistry.SlasherCommitment memory slasherCommitment =
@@ -668,7 +658,7 @@ contract SlashCommitmentFromOptInTester is UnitTestHelper {
     function testRevertSlashAmountExceedsCollateral() public {
         RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
             proposerSecretKey: SECRET_KEY_1,
-            collateral: dummySlasher.SLASH_AMOUNT_GWEI() * 1 gwei - 1, // Less than slash amount
+            collateral: dummySlasher.SLASH_AMOUNT_WEI() - 1, // Less than slash amount
             owner: operator,
             delegateSecretKey: SECRET_KEY_2,
             committerSecretKey: committerSecretKey,
@@ -765,11 +755,7 @@ contract SlashEquivocationTester is UnitTestHelper {
         OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
         // verify operator's collateralGwei is decremented by MIN_COLLATERAL
-        assertEq(
-            operatorData.collateralGwei,
-            (collateral - registry.MIN_COLLATERAL()) / 1 gwei,
-            "collateralGwei not decremented"
-        );
+        assertEq(operatorData.collateralWei, (collateral - registry.MIN_COLLATERAL()), "collateralWei not decremented");
 
         assertEq(
             challenger.balance, challengerBalanceBefore + registry.MIN_COLLATERAL(), "challenger did not receive reward"
@@ -1100,7 +1086,7 @@ contract SlashReentrantTester is UnitTestHelper {
 
         uint256 challengerBalanceBefore = challenger.balance;
         uint256 urcBalanceBefore = address(registry).balance;
-        uint56 operatorCollateralGweiBefore = getRegistrationData(result.registrationRoot).collateralGwei;
+        uint80 operatorCollateralWeiBefore = getRegistrationData(result.registrationRoot).collateralWei;
 
         // Sign a second delegation to equivocate
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(
@@ -1123,9 +1109,9 @@ contract SlashReentrantTester is UnitTestHelper {
             reentrantContractAddress,
             challenger,
             address(registry),
-            registry.MIN_COLLATERAL() / 1 gwei
+            registry.MIN_COLLATERAL()
         );
-        uint256 gotSlashAmountGwei = registry.slashEquivocation(
+        uint256 gotSlashAmountWei = registry.slashEquivocation(
             result.registrationRoot,
             result.registrations[0].signature,
             proof,
@@ -1133,15 +1119,15 @@ contract SlashReentrantTester is UnitTestHelper {
             result.signedDelegation,
             signedDelegationTwo
         );
-        assertEq(registry.MIN_COLLATERAL() / 1 gwei, gotSlashAmountGwei, "Slash amount incorrect");
+        assertEq(registry.MIN_COLLATERAL(), gotSlashAmountWei, "Slash amount incorrect");
 
         OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
         // verify operator's collateralGwei is decremented by MIN_COLLATERAL
         assertEq(
-            operatorData.collateralGwei,
-            (IReentrantContract(reentrantContractAddress).collateral() - registry.MIN_COLLATERAL()) / 1 gwei,
-            "collateralGwei not decremented"
+            operatorData.collateralWei,
+            (IReentrantContract(reentrantContractAddress).collateral() - registry.MIN_COLLATERAL()),
+            "collateralWei not decremented"
         );
 
         assertEq(
@@ -1153,9 +1139,7 @@ contract SlashReentrantTester is UnitTestHelper {
 
         // Verify operator's collateralGwei is decremented
         assertEq(
-            operatorData.collateralGwei,
-            operatorCollateralGweiBefore - gotSlashAmountGwei,
-            "collateralGwei not decremented"
+            operatorData.collateralWei, operatorCollateralWeiBefore - gotSlashAmountWei, "collateralWei not decremented"
         );
     }
 }

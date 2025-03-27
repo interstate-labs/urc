@@ -41,15 +41,15 @@ contract UnitTestHelper is Test {
     /// @dev Helper to verify operator data matches expected values
     function _assertRegistration(
         bytes32 registrationRoot,
-        address expectedowner,
-        uint56 expectedCollateral,
-        uint32 expectedRegisteredAt,
-        uint32 expectedUnregisteredAt,
-        uint32 expectedSlashedAt
+        address expectedOwner,
+        uint80 expectedCollateral,
+        uint48 expectedRegisteredAt,
+        uint48 expectedUnregisteredAt,
+        uint48 expectedSlashedAt
     ) internal view {
         OperatorData memory operatorData = getRegistrationData(registrationRoot);
-        assertEq(operatorData.owner, expectedowner, "Wrong withdrawal address");
-        assertEq(operatorData.collateralGwei, expectedCollateral, "Wrong collateral amount");
+        assertEq(operatorData.owner, expectedOwner, "Wrong withdrawal address");
+        assertEq(operatorData.collateralWei, expectedCollateral, "Wrong collateral amount");
         assertEq(operatorData.registeredAt, expectedRegisteredAt, "Wrong registration block");
         assertEq(operatorData.unregisteredAt, expectedUnregisteredAt, "Wrong unregistration block");
         assertEq(operatorData.slashedAt, expectedSlashedAt, "Wrong slashed block");
@@ -105,26 +105,26 @@ contract UnitTestHelper is Test {
 
     struct OperatorData {
         address owner;
-        uint56 collateralGwei;
-        uint8 numKeys;
-        uint32 registeredAt;
-        uint32 unregisteredAt;
-        uint32 slashedAt;
+        uint80 collateralWei;
+        uint16 numKeys;
+        uint48 registeredAt;
+        uint48 unregisteredAt;
+        uint48 slashedAt;
     }
 
     function getRegistrationData(bytes32 registrationRoot) public view returns (OperatorData memory) {
         (
             address owner,
-            uint56 collateralGwei,
-            uint8 numKeys,
-            uint32 registeredAt,
-            uint32 unregisteredAt,
-            uint32 slashedAt
+            uint80 collateralWei,
+            uint16 numKeys,
+            uint48 registeredAt,
+            uint48 unregisteredAt,
+            uint48 slashedAt
         ) = registry.registrations(registrationRoot);
 
         return OperatorData({
             owner: owner,
-            collateralGwei: collateralGwei,
+            collateralWei: collateralWei,
             numKeys: numKeys,
             registeredAt: registeredAt,
             unregisteredAt: unregisteredAt,
@@ -140,9 +140,7 @@ contract UnitTestHelper is Test {
 
         registrationRoot = registry.register{ value: collateral }(registrations, owner);
 
-        _assertRegistration(
-            registrationRoot, owner, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
-        );
+        _assertRegistration(registrationRoot, owner, uint80(collateral), uint48(block.number), type(uint48).max, 0);
     }
 
     function basicCommitment(uint256 secretKey, address slasher, bytes memory payload)

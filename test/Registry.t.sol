@@ -170,7 +170,7 @@ contract UnregisterTester is UnitTestHelper {
 
         vm.startPrank(operator);
         vm.expectEmit(address(registry));
-        emit IRegistry.OperatorUnregistered(registrationRoot, uint48(block.number));
+        emit IRegistry.OperatorUnregistered(registrationRoot);
         registry.unregister(registrationRoot);
 
         OperatorData memory operatorData = getRegistrationData(registrationRoot);

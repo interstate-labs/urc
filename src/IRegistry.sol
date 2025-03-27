@@ -94,8 +94,7 @@ interface IRegistry {
 
     /// @notice Emitted when an operator is unregistered
     /// @param registrationRoot The merkle root of the registration merkle tree
-    /// @param unregisteredAt The block number when the operator was unregistered
-    event OperatorUnregistered(bytes32 indexed registrationRoot, uint48 unregisteredAt);
+    event OperatorUnregistered(bytes32 indexed registrationRoot);
 
     /// @notice Emitted when collateral is claimed
     /// @param registrationRoot The merkle root of the registration merkle tree

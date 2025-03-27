@@ -111,7 +111,7 @@ contract Registry is IRegistry {
         // Save the block number; they must wait for the unregistration delay to claim collateral
         operator.unregisteredAt = uint48(block.number);
 
-        emit OperatorUnregistered(registrationRoot, operator.unregisteredAt);
+        emit OperatorUnregistered(registrationRoot);
     }
 
     /// @notice Opts an operator into a proposer commtiment protocol via Slasher contract

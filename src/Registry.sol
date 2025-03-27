@@ -60,6 +60,11 @@ contract Registry is IRegistry {
             revert InvalidRegistrationRoot();
         }
 
+        // Prevent reusing a deleted operator
+        if (registrations[registrationRoot].deleted) {
+            revert OperatorDeleted();
+        }
+
         // Prevent duplicates from overwriting previous registrations
         if (registrations[registrationRoot].registeredAt != 0) {
             revert OperatorAlreadyRegistered();
@@ -91,6 +96,11 @@ contract Registry is IRegistry {
     /// @param registrationRoot The merkle root generated and stored from the register() function
     function unregister(bytes32 registrationRoot) external {
         Operator storage operator = registrations[registrationRoot];
+
+        // Prevent reusing a deleted operator
+        if (operator.deleted) {
+            revert OperatorDeleted();
+        }
 
         // Only the authorized owner can unregister
         if (operator.owner != msg.sender) {
@@ -127,6 +137,11 @@ contract Registry is IRegistry {
 
     function optInToSlasher(bytes32 registrationRoot, address slasher, address committer) external {
         Operator storage operator = registrations[registrationRoot];
+
+        // Prevent reusing a deleted operator
+        if (operator.deleted) {
+            revert OperatorDeleted();
+        }
 
         // Only the authorized owner can opt in
         if (operator.owner != msg.sender) {
@@ -167,6 +182,11 @@ contract Registry is IRegistry {
     /// @param slasher The address of the Slasher contract to opt out of
     function optOutOfSlasher(bytes32 registrationRoot, address slasher) external {
         Operator storage operator = registrations[registrationRoot];
+
+        // Prevent reusing a deleted operator
+        if (operator.deleted) {
+            revert OperatorDeleted();
+        }
 
         // Only the authorized owner can opt out
         if (operator.owner != msg.sender) {
@@ -242,8 +262,8 @@ contract Registry is IRegistry {
             revert FraudProofChallengeInvalid();
         }
 
-        // Delete the operator, they must re-register to continue
-        delete registrations[registrationRoot];
+        // Prevent the Operator from being reused
+        operator.deleted = true;
 
         // Calculate the amount to transfer to challenger and return to owner
         uint256 remainingWei = collateralWei - MIN_COLLATERAL;
@@ -301,6 +321,11 @@ contract Registry is IRegistry {
         bytes calldata evidence
     ) external returns (uint256 slashAmountWei) {
         Operator storage operator = registrations[registrationRoot];
+
+        // Prevent reusing a deleted operator
+        if (operator.deleted) {
+            revert OperatorDeleted();
+        }
 
         bytes32 slashingDigest = keccak256(abi.encode(delegation, commitment, registrationRoot));
 
@@ -390,6 +415,12 @@ contract Registry is IRegistry {
         bytes calldata evidence
     ) external returns (uint256 slashAmountWei) {
         Operator storage operator = registrations[registrationRoot];
+
+        // Prevent reusing a deleted operator
+        if (operator.deleted) {
+            revert OperatorDeleted();
+        }
+
         address slasher = commitment.commitment.slasher;
 
         // Operator is not liable for slashings before the fraud proof window elapses
@@ -478,6 +509,11 @@ contract Registry is IRegistry {
     ) external returns (uint256 slashAmountWei) {
         Operator storage operator = registrations[registrationRoot];
 
+        // Prevent reusing a deleted operator
+        if (operator.deleted) {
+            revert OperatorDeleted();
+        }
+
         bytes32 slashingDigest = keccak256(abi.encode(delegationOne, delegationTwo, registrationRoot));
 
         // Verify the delegations are not identical
@@ -564,6 +600,12 @@ contract Registry is IRegistry {
     /// @param registrationRoot The merkle root generated and stored from the register() function
     function addCollateral(bytes32 registrationRoot) external payable {
         Operator storage operator = registrations[registrationRoot];
+
+        // Prevent reusing a deleted operator
+        if (operator.deleted) {
+            revert OperatorDeleted();
+        }
+
         if (operator.collateralWei == 0) {
             revert NotRegisteredKey();
         }
@@ -591,6 +633,11 @@ contract Registry is IRegistry {
         address operatorOwner = operator.owner;
         uint256 collateralWei = operator.collateralWei;
 
+        // Prevent reusing a deleted operator
+        if (operator.deleted) {
+            revert OperatorDeleted();
+        }
+
         // Check that they've unregistered
         if (operator.unregisteredAt == type(uint48).max) {
             revert NotUnregistered();
@@ -611,8 +658,8 @@ contract Registry is IRegistry {
             revert NoCollateralToClaim();
         }
 
-        // Clear operator info
-        delete registrations[registrationRoot];
+        // Prevent the Operator from being reused
+        operator.deleted = true;
 
         // Transfer to operator
         bool success;
@@ -628,6 +675,12 @@ contract Registry is IRegistry {
 
     function claimSlashedCollateral(bytes32 registrationRoot) external {
         Operator storage operator = registrations[registrationRoot];
+
+        // Prevent reusing a deleted operator
+        if (operator.deleted) {
+            revert OperatorDeleted();
+        }
+
         address owner = operator.owner;
         uint256 collateralWei = operator.collateralWei;
 
@@ -641,8 +694,8 @@ contract Registry is IRegistry {
             revert SlashWindowNotMet();
         }
 
-        // Delete the operator
-        delete registrations[registrationRoot];
+        // Prevent the Operator from being reused
+        operator.deleted = true;
 
         // Transfer collateral to owner
         bool success;
@@ -762,7 +815,7 @@ contract Registry is IRegistry {
     /// @dev Leaves are created by abi-encoding the `Registration` structs, then hashing with keccak256.
     /// @param regs The array of `Registration` structs to merkleize
     /// @return registrationRoot The merkle root of the registration
-    function _merkleizeRegistrations(Registration[] calldata regs) internal returns (bytes32 registrationRoot) {
+    function _merkleizeRegistrations(Registration[] calldata regs) internal pure returns (bytes32 registrationRoot) {
         // Create leaves array with padding
         bytes32[] memory leaves = new bytes32[](regs.length);
 

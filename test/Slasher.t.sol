@@ -350,7 +350,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         );
 
         // verify operator was deleted
-        _assertRegistration(result.registrationRoot, address(0), 0, 0, 0, 0);
+        assertEq(getRegistrationData(result.registrationRoot).deleted, true, "operator was not deleted");
     }
 
     // test multiple slashings

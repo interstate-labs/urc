@@ -110,6 +110,7 @@ contract UnitTestHelper is Test {
         uint48 registeredAt;
         uint48 unregisteredAt;
         uint48 slashedAt;
+        bool deleted;
     }
 
     function getRegistrationData(bytes32 registrationRoot) public view returns (OperatorData memory) {
@@ -119,7 +120,8 @@ contract UnitTestHelper is Test {
             uint16 numKeys,
             uint48 registeredAt,
             uint48 unregisteredAt,
-            uint48 slashedAt
+            uint48 slashedAt,
+            bool deleted
         ) = registry.registrations(registrationRoot);
 
         return OperatorData({
@@ -128,7 +130,8 @@ contract UnitTestHelper is Test {
             numKeys: numKeys,
             registeredAt: registeredAt,
             unregisteredAt: unregisteredAt,
-            slashedAt: slashedAt
+            slashedAt: slashedAt,
+            deleted: deleted
         });
     }
 
@@ -365,17 +368,17 @@ contract ReentrantSlashableRegistrationContract is ReentrantContract {
             errors += 1;
         }
 
-        // expected re-registering to succeed
-        bytes32 oldRegistrationRoot = registrationRoot;
+        // expected re-registering to fail
         IRegistry.Registration[] memory _registrations = new IRegistry.Registration[](1);
         _registrations[0] = registrations[0];
         require(_registrations.length == 1, "test harness supports only 1 registration");
-        register(_registrations);
-
-        require(registrationRoot == oldRegistrationRoot, "registration root should not change");
-
+        try registry.register{ value: collateral }(_registrations, address(this)) {
+            revert("should not be able to register");
+        } catch (bytes memory _reason) {
+            errors += 1;
+        }
         // previous attempts to re-enter should have failed
-        require(errors == 4, "should have 4 errors");
+        require(errors == 5, "should have 5 errors");
     }
 }
 

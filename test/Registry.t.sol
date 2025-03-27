@@ -358,8 +358,7 @@ contract ClaimCollateralTester is UnitTestHelper {
         assertEq(operator.balance, balanceBefore + collateral, "Collateral not returned");
 
         // Verify registration was deleted
-        OperatorData memory operatorData = getRegistrationData(registrationRoot);
-        assertEq(operatorData.owner, address(0), "Registration not deleted");
+        assertEq(getRegistrationData(registrationRoot).deleted, true, "Registration not deleted");
     }
 
     function test_claimCollateral_notUnregistered() public {
@@ -410,7 +409,7 @@ contract ClaimCollateralTester is UnitTestHelper {
 
         // Try to claim again
         vm.startPrank(operator);
-        vm.expectRevert(IRegistry.NoCollateralToClaim.selector);
+        vm.expectRevert(IRegistry.OperatorDeleted.selector);
         registry.claimCollateral(registrationRoot);
     }
 }
@@ -523,7 +522,7 @@ contract SlashRegistrationTester is UnitTestHelper {
         );
 
         // ensure operator was deleted
-        _assertRegistration(registrationRoot, address(0), 0, 0, 0, 0);
+        assertEq(getRegistrationData(registrationRoot).deleted, true, "operator was not deleted");
     }
 
     function test_slashRegistrationHeight1_DifferentOwner() public {
@@ -575,7 +574,7 @@ contract SlashRegistrationTester is UnitTestHelper {
         );
 
         // ensure operator was deleted
-        _assertRegistration(registrationRoot, address(0), 0, 0, 0, 0);
+        assertEq(getRegistrationData(registrationRoot).deleted, true, "operator was not deleted");
     }
 
     function test_slashRegistrationHeight2_DifferentOwner() public {
@@ -618,8 +617,9 @@ contract SlashRegistrationTester is UnitTestHelper {
         );
     }
 
-    function test_slashRegistrationFuzz_DifferentOwner(uint8 n) public {
+    function test_slashRegistrationFuzz_DifferentOwner(uint8 n, uint8 leafIndex) public {
         vm.assume(n > 0);
+        vm.assume(leafIndex < n);
         uint256 size = uint256(n);
         uint256 collateral = registry.MIN_COLLATERAL();
 
@@ -639,28 +639,14 @@ contract SlashRegistrationTester is UnitTestHelper {
         uint256 operatorBalanceBefore = operator.balance;
         uint256 urcBalanceBefore = address(registry).balance;
 
-        // Test all proof paths
-        for (uint256 i = 0; i < leaves.length; i++) {
-            bytes32[] memory proof = MerkleTree.generateProof(leaves, i);
-            vm.startPrank(operator);
-            registry.slashRegistration(registrationRoot, registrations[i], proof, i);
-            _verifySlashingBalances(
-                operator, thief, 0, collateral, collateral, thiefBalanceBefore, operatorBalanceBefore, urcBalanceBefore
-            );
+        bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
+        vm.startPrank(operator);
+        registry.slashRegistration(registrationRoot, registrations[leafIndex], proof, leafIndex);
+        _verifySlashingBalances(
+            operator, thief, 0, collateral, collateral, thiefBalanceBefore, operatorBalanceBefore, urcBalanceBefore
+        );
 
-            _assertRegistration(registrationRoot, address(0), 0, 0, 0, 0);
-
-            // Re-register to reset the state
-            registrationRoot = registry.register{ value: collateral }(
-                registrations,
-                thief // submit different withdrawal address than the one signed by validator keys
-            );
-
-            // update balances
-            thiefBalanceBefore = thief.balance;
-            operatorBalanceBefore = operator.balance;
-            urcBalanceBefore = address(registry).balance;
-        }
+        assertEq(getRegistrationData(registrationRoot).deleted, true, "operator was not deleted");
     }
 }
 
@@ -709,8 +695,7 @@ contract RentrancyTester is UnitTestHelper {
         );
 
         // Verify registration was deleted
-        OperatorData memory operatorData = getRegistrationData(reentrantContract.registrationRoot());
-        assertEq(operatorData.owner, address(0), "Registration not deleted");
+        assertEq(getRegistrationData(reentrantContract.registrationRoot()).deleted, true, "operator was not deleted");
     }
 
     // For setup we register() -> slashRegistration()

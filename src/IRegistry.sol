@@ -35,6 +35,8 @@ interface IRegistry {
         uint48 unregisteredAt;
         /// The block number when slashed from breaking a commitment
         uint48 slashedAt;
+        /// A field to simulate deletion of the operator, since deleting a struct with a nested mapping is not safe
+        bool deleted;
         /// Mapping to track opt-in and opt-out status for proposer commitment protocols
         mapping(address slasher => SlasherCommitment) slasherCommitments;
         /// Historical collateral records
@@ -126,6 +128,7 @@ interface IRegistry {
      */
     error InsufficientCollateral();
     error OperatorAlreadyRegistered();
+    error OperatorDeleted();
     error InvalidRegistrationRoot();
     error EthTransferFailed();
     error WrongOperator();

@@ -249,13 +249,19 @@ contract Registry is IRegistry {
         uint256 remainingWei = uint256(collateralGwei) * 1 gwei - MIN_COLLATERAL;
 
         // Transfer to the challenger
-        (bool success,) = msg.sender.call{ value: MIN_COLLATERAL }("");
+        bool success;
+        address challenger = msg.sender;
+        assembly ("memory-safe") {
+            success := call(gas(), challenger, MIN_COLLATERAL, 0, 0, 0, 0)
+        }
         if (!success) {
             revert EthTransferFailed();
         }
 
         // Return any remaining funds to owner
-        (success,) = owner.call{ value: remainingWei }("");
+        assembly ("memory-safe") {
+            success := call(gas(), owner, remainingWei, 0, 0, 0, 0)
+        }
         if (!success) {
             revert EthTransferFailed();
         }
@@ -532,7 +538,11 @@ contract Registry is IRegistry {
         slashedBefore[keccak256(abi.encode(delegationTwo, delegationOne, registrationRoot))] = true;
 
         // Reward the challenger
-        (bool success,) = msg.sender.call{ value: MIN_COLLATERAL }("");
+        bool success;
+        address challenger = msg.sender;
+        assembly ("memory-safe") {
+            success := call(gas(), challenger, MIN_COLLATERAL, 0, 0, 0, 0)
+        }
         if (!success) {
             revert EthTransferFailed();
         }
@@ -604,7 +614,11 @@ contract Registry is IRegistry {
         delete registrations[registrationRoot];
 
         // Transfer to operator
-        (bool success,) = operatorOwner.call{ value: collateralGwei * 1 gwei }("");
+        bool success;
+        uint256 collateral = collateralGwei * 1 gwei;
+        assembly ("memory-safe") {
+            success := call(gas(), operatorOwner, collateral, 0, 0, 0, 0)
+        }
         if (!success) {
             revert EthTransferFailed();
         }
@@ -631,7 +645,11 @@ contract Registry is IRegistry {
         delete registrations[registrationRoot];
 
         // Transfer collateral to owner
-        (bool success,) = owner.call{ value: collateralGwei * 1 gwei }("");
+        bool success;
+        uint256 collateral = collateralGwei * 1 gwei;
+        assembly ("memory-safe") {
+            success := call(gas(), owner, collateral, 0, 0, 0, 0)
+        }
         if (!success) {
             revert EthTransferFailed();
         }
@@ -813,7 +831,12 @@ contract Registry is IRegistry {
     /// @param amountGwei The amount of GWEI to be burned
     function _burnGwei(uint256 amountGwei) internal {
         // Burn the slash amount
-        (bool success,) = BURNER_ADDRESS.call{ value: amountGwei * 1 gwei }("");
+        bool success;
+        address burner = BURNER_ADDRESS;
+        uint256 collateral = amountGwei * 1 gwei;
+        assembly ("memory-safe") {
+            success := call(gas(), burner, collateral, 0, 0, 0, 0)
+        }
         if (!success) {
             revert EthTransferFailed();
         }

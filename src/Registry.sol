@@ -752,7 +752,6 @@ contract Registry is IRegistry {
         // Create leaf nodes by hashing Registration structs
         for (uint256 i = 0; i < regs.length; i++) {
             leaves[i] = keccak256(abi.encode(regs[i]));
-            emit KeyRegistered(i, regs[i], leaves[i]);
         }
 
         registrationRoot = MerkleTree.generateTree(leaves);

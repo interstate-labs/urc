@@ -84,10 +84,7 @@ contract Registry is IRegistry {
 
         // Store the initial collateral value in the history
         newOperator.collateralHistory.push(
-            CollateralRecord({
-                timestamp: uint64(block.timestamp),
-                collateralValue: uint56(msg.value / 1 gwei)
-            })
+            CollateralRecord({ timestamp: uint64(block.timestamp), collateralValue: uint56(msg.value / 1 gwei) })
         );
 
         emit OperatorRegistered(
@@ -157,8 +154,7 @@ contract Registry is IRegistry {
         }
 
         // Retrieve the SlasherCommitment struct
-        SlasherCommitment storage slasherCommitment = operator
-            .slasherCommitments[slasher];
+        SlasherCommitment storage slasherCommitment = operator.slasherCommitments[slasher];
 
         // Check if already opted in
         if (slasherCommitment.optedOutAt < slasherCommitment.optedInAt) {
@@ -188,10 +184,8 @@ contract Registry is IRegistry {
     /// @dev - The opt-in delay has not passed (OptInDelayNotMet)
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param slasher The address of the Slasher contract to opt out of
-    function optOutOfSlasher(
-        bytes32 registrationRoot,
-        address slasher
-    ) external {
+    function optOutOfSlasher(bytes32 registrationRoot, address slasher) external {
+
         Operator storage operator = registrations[registrationRoot];
 
         // Only the authorized owner can opt out
@@ -200,8 +194,7 @@ contract Registry is IRegistry {
         }
 
         // Retrieve the SlasherCommitment struct
-        SlasherCommitment storage slasherCommitment = operator
-            .slasherCommitments[slasher];
+        SlasherCommitment storage slasherCommitment = operator.slasherCommitments[slasher];
 
         // Check if already opted out or never opted in
         if (slasherCommitment.optedOutAt >= slasherCommitment.optedInAt) {

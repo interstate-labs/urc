@@ -84,7 +84,7 @@ contract Registry is IRegistry {
 
         // Store the initial collateral value in the history
         newOperator.collateralHistory.push(
-            CollateralRecord({ timestamp: uint64(block.timestamp), collateralValue: uint56(msg.value / 1 gwei) })   
+            CollateralRecord({ timestamp: uint64(block.timestamp), collateralValue: uint56(msg.value / 1 gwei) })
         );
 
         emit OperatorRegistered(registrationRoot, uint56(msg.value / 1 gwei), owner);
@@ -132,6 +132,7 @@ contract Registry is IRegistry {
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param slasher The address of the Slasher contract to opt into
     /// @param committer The address of the key used for commitments
+
     function optInToSlasher(bytes32 registrationRoot, address slasher, address committer) external {
         Operator storage operator = registrations[registrationRoot];
 
@@ -155,8 +156,7 @@ contract Registry is IRegistry {
 
         // Fix: If previously opted out, enforce delay before allowing new opt-in
         // Changed from block.timestamp to block.number to match the optedOutAt type
-        if (slasherCommitment.optedOutAt != 0 && block.number < slasherCommitment.optedOutAt + OPT_IN_DELAY
-        ) {
+        if (slasherCommitment.optedOutAt != 0 && block.number < slasherCommitment.optedOutAt + OPT_IN_DELAY) {
             revert OptInDelayNotMet();
         }
 
@@ -182,7 +182,7 @@ contract Registry is IRegistry {
         }
 
         // Retrieve the SlasherCommitment struct
-      SlasherCommitment storage slasherCommitment = operator.slasherCommitments[slasher];
+        SlasherCommitment storage slasherCommitment = operator.slasherCommitments[slasher];
 
         // Check if already opted out or never opted in
         if (slasherCommitment.optedOutAt >= slasherCommitment.optedInAt) {
@@ -318,7 +318,7 @@ contract Registry is IRegistry {
         }
 
         // Operator is not liable for slashings after unregister and the delay has passed
-       if (
+        if (
             operator.unregisteredAt != type(uint32).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
         ) {
             revert OperatorAlreadyUnregistered();
@@ -409,7 +409,7 @@ contract Registry is IRegistry {
 
         // Slashing can only occur within the slash window after the first reported slashing
         // After the slash window has passed, the operator can claim collateral
-      if (operator.slashedAt != 0 && block.number > operator.slashedAt + SLASH_WINDOW) {
+        if (operator.slashedAt != 0 && block.number > operator.slashedAt + SLASH_WINDOW) {
             revert SlashWindowExpired();
         }
 
@@ -436,7 +436,7 @@ contract Registry is IRegistry {
         delete operator.slasherCommitments[slasher];
 
         // Call the Slasher contract to slash the operator
-     slashAmountGwei = ISlasher(slasher).slashFromOptIn(commitment.commitment, evidence, msg.sender);
+        slashAmountGwei = ISlasher(slasher).slashFromOptIn(commitment.commitment, evidence, msg.sender);
 
         // Prevent slashing more than the operator's collateral
         if (slashAmountGwei > operator.collateralGwei) {
@@ -487,7 +487,7 @@ contract Registry is IRegistry {
     ) external returns (uint256 slashAmountGwei) {
         Operator storage operator = registrations[registrationRoot];
 
-       bytes32 slashingDigest = keccak256(abi.encode(delegationOne, delegationTwo, registrationRoot));
+        bytes32 slashingDigest = keccak256(abi.encode(delegationOne, delegationTwo, registrationRoot));
 
         // Verify the delegations are not identical by comparing only essential fields
         if (
@@ -516,7 +516,7 @@ contract Registry is IRegistry {
         }
 
         // Operator is not liable for slashings after unregister and the delay has passed
-      if (
+        if (
             operator.unregisteredAt != type(uint32).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
         ) {
             revert OperatorAlreadyUnregistered();
@@ -524,7 +524,7 @@ contract Registry is IRegistry {
 
         // Slashing can only occur within the slash window after the first reported slashing
         // After the slash window has passed, the operator can claim collateral
-     if (operator.slashedAt != 0 && block.number > operator.slashedAt + SLASH_WINDOW) {
+        if (operator.slashedAt != 0 && block.number > operator.slashedAt + SLASH_WINDOW) {
             revert SlashWindowExpired();
         }
 
@@ -685,7 +685,7 @@ contract Registry is IRegistry {
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param timestamp The timestamp to retrieve the collateral value for
     /// @return collateralGwei The collateral amount in GWEI at the closest recorded timestamp
- function getHistoricalCollateral(bytes32 registrationRoot, uint256 timestamp)
+    function getHistoricalCollateral(bytes32 registrationRoot, uint256 timestamp)
         external
         view
         returns (uint256 collateralGwei)
@@ -759,7 +759,7 @@ contract Registry is IRegistry {
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param slasher The address of the slasher to check
     /// @return True if the operator is opted in, false otherwise
-   function isOptedIntoSlasher(bytes32 registrationRoot, address slasher) external view returns (bool) {
+    function isOptedIntoSlasher(bytes32 registrationRoot, address slasher) external view returns (bool) {
         Operator storage operator = registrations[registrationRoot];
         if (operator.registeredAt == 0) {
             revert NotRegisteredKey();
@@ -858,7 +858,7 @@ contract Registry is IRegistry {
         // Reconstruct Delegation message
         bytes memory message = abi.encode(delegation.delegation);
 
-  if (!BLS.verify(message, delegation.signature, delegation.delegation.proposer, DELEGATION_DOMAIN_SEPARATOR)) {
+        if (!BLS.verify(message, delegation.signature, delegation.delegation.proposer, DELEGATION_DOMAIN_SEPARATOR)) {
             revert DelegationSignatureInvalid();
         }
     }

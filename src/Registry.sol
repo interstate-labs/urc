@@ -46,10 +46,11 @@ contract Registry is IRegistry {
     /// @param regs The BLS keys to register
     /// @param owner The authorized address to perform actions on behalf of the operator
     /// @return registrationRoot The merkle root of the registration
-    function register(
-        Registration[] calldata regs,
-        address owner
-    ) external payable returns (bytes32 registrationRoot) {
+    function register(Registration[] calldata regs, address owner)
+        external
+        payable
+        returns (bytes32 registrationRoot)
+    {
         // Add dust check
         if (msg.value % 1 gwei != 0) {
             revert DustAmountNotAllowed();

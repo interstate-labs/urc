@@ -26,8 +26,7 @@ contract Registry is IRegistry {
     uint256 public constant FRAUD_PROOF_WINDOW = 7200; // 1 day
     uint32 public constant SLASH_WINDOW = 7200; // 1 day
     uint32 public constant OPT_IN_DELAY = 7200; // 1 day
-    address internal constant BURNER_ADDRESS =
-        address(0x0000000000000000000000000000000000000000);
+    address internal constant BURNER_ADDRESS = address(0x0000000000000000000000000000000000000000);
     bytes public constant REGISTRATION_DOMAIN_SEPARATOR = "0x00435255"; // "URC" in little endian
     bytes public constant DELEGATION_DOMAIN_SEPARATOR = "0x0044656c"; // "Del" in little endian
 

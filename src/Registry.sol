@@ -26,8 +26,7 @@ contract Registry is IRegistry {
     uint256 public constant FRAUD_PROOF_WINDOW = 7200; // 1 day
     uint32 public constant SLASH_WINDOW = 7200; // 1 day
     uint32 public constant OPT_IN_DELAY = 7200; // 1 day
-    address internal constant BURNER_ADDRESS =
-        address(0x0000000000000000000000000000000000000000);
+    address internal constant BURNER_ADDRESS = address(0x0000000000000000000000000000000000000000);
     bytes public constant REGISTRATION_DOMAIN_SEPARATOR = "0x00555243"; // "URC" in little endian
     bytes public constant DELEGATION_DOMAIN_SEPARATOR = "0x0044656c"; // "Del" in little endian
 
@@ -47,10 +46,11 @@ contract Registry is IRegistry {
     /// @param regs The BLS keys to register
     /// @param owner The authorized address to perform actions on behalf of the operator
     /// @return registrationRoot The merkle root of the registration
-    function register(
-        Registration[] calldata regs,
-        address owner
-    ) external payable returns (bytes32 registrationRoot) {
+    function register(Registration[] calldata regs, address owner)
+        external
+        payable
+        returns (bytes32 registrationRoot)
+    {
         // Add dust check
         if (msg.value % 1 gwei != 0) {
             revert DustAmountNotAllowed();
@@ -84,10 +84,7 @@ contract Registry is IRegistry {
 
         // Store the initial collateral value in the history
         newOperator.collateralHistory.push(
-            CollateralRecord({
-                timestamp: uint64(block.timestamp),
-                collateralValue: uint56(msg.value / 1 gwei)
-            })
+            CollateralRecord({ timestamp: uint64(block.timestamp), collateralValue: uint56(msg.value / 1 gwei) })   
         );
 
         emit OperatorRegistered(registrationRoot, uint56(msg.value / 1 gwei), owner);
@@ -149,8 +146,7 @@ contract Registry is IRegistry {
         }
 
         // Retrieve the SlasherCommitment struct
-        SlasherCommitment storage slasherCommitment = operator
-            .slasherCommitments[slasher];
+        SlasherCommitment storage slasherCommitment = operator.slasherCommitments[slasher];
 
         // Check if already opted in
         if (slasherCommitment.optedOutAt < slasherCommitment.optedInAt) {
@@ -186,7 +182,7 @@ contract Registry is IRegistry {
         }
 
         // Retrieve the SlasherCommitment struct
-       SlasherCommitment storage slasherCommitment = operator.slasherCommitments[slasher];
+      SlasherCommitment storage slasherCommitment = operator.slasherCommitments[slasher];
 
         // Check if already opted out or never opted in
         if (slasherCommitment.optedOutAt >= slasherCommitment.optedInAt) {
@@ -413,7 +409,7 @@ contract Registry is IRegistry {
 
         // Slashing can only occur within the slash window after the first reported slashing
         // After the slash window has passed, the operator can claim collateral
-       if (operator.slashedAt != 0 && block.number > operator.slashedAt + SLASH_WINDOW) {
+      if (operator.slashedAt != 0 && block.number > operator.slashedAt + SLASH_WINDOW) {
             revert SlashWindowExpired();
         }
 
@@ -440,7 +436,7 @@ contract Registry is IRegistry {
         delete operator.slasherCommitments[slasher];
 
         // Call the Slasher contract to slash the operator
-      slashAmountGwei = ISlasher(slasher).slashFromOptIn(commitment.commitment, evidence, msg.sender);
+     slashAmountGwei = ISlasher(slasher).slashFromOptIn(commitment.commitment, evidence, msg.sender);
 
         // Prevent slashing more than the operator's collateral
         if (slashAmountGwei > operator.collateralGwei) {
@@ -528,7 +524,7 @@ contract Registry is IRegistry {
 
         // Slashing can only occur within the slash window after the first reported slashing
         // After the slash window has passed, the operator can claim collateral
-      if (operator.slashedAt != 0 && block.number > operator.slashedAt + SLASH_WINDOW) {
+     if (operator.slashedAt != 0 && block.number > operator.slashedAt + SLASH_WINDOW) {
             revert SlashWindowExpired();
         }
 
@@ -785,7 +781,7 @@ contract Registry is IRegistry {
         bytes32[] calldata proof,
         uint256 leafIndex,
         address slasher
-     ) external view returns (SlasherCommitment memory slasherCommitment, uint256 collateralGwei) {
+    ) external view returns (SlasherCommitment memory slasherCommitment, uint256 collateralGwei) {
         Operator storage operator = registrations[registrationRoot];
         slasherCommitment = operator.slasherCommitments[slasher];
 
@@ -818,7 +814,7 @@ contract Registry is IRegistry {
     /// @param proof The merkle proof to verify the operator's key is in the registry
     /// @param leafIndex The index of the leaf in the merkle tree
     /// @return collateralGwei The collateral amount in GWEI
-  function _verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
+ function _verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
         internal
         view
         returns (uint256 collateralGwei)
@@ -853,7 +849,7 @@ contract Registry is IRegistry {
         });
         bytes32 leaf = keccak256(abi.encode(reg));
 
-      collateralGwei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
+     collateralGwei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
 
         if (collateralGwei == 0) {
             revert NotRegisteredKey();
@@ -862,7 +858,7 @@ contract Registry is IRegistry {
         // Reconstruct Delegation message
         bytes memory message = abi.encode(delegation.delegation);
 
-    if (!BLS.verify(message, delegation.signature, delegation.delegation.proposer, DELEGATION_DOMAIN_SEPARATOR)) {
+  if (!BLS.verify(message, delegation.signature, delegation.delegation.proposer, DELEGATION_DOMAIN_SEPARATOR)) {
             revert DelegationSignatureInvalid();
         }
     }
@@ -872,7 +868,7 @@ contract Registry is IRegistry {
     /// @param amountGwei The amount of GWEI to be burned
     function _burnGwei(uint256 amountGwei) internal {
         // Burn the slash amount
-     (bool success,) = BURNER_ADDRESS.call{ value: amountGwei * 1 gwei }("");
+  (bool success,) = BURNER_ADDRESS.call{ value: amountGwei * 1 gwei }("");
         if (!success) {
             revert EthTransferFailed();
         }

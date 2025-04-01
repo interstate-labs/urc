@@ -178,10 +178,7 @@ contract Registry is IRegistry {
     /// @dev - The opt-in delay has not passed (OptInDelayNotMet)
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param slasher The address of the Slasher contract to opt out of
-    function optOutOfSlasher(
-        bytes32 registrationRoot,
-        address slasher
-    ) external {
+    function optOutOfSlasher(bytes32 registrationRoot, address slasher) external {
         Operator storage operator = registrations[registrationRoot];
         // Only the authorized owner can opt out
         if (operator.owner != msg.sender) {
@@ -189,8 +186,7 @@ contract Registry is IRegistry {
         }
 
         // Retrieve the SlasherCommitment struct
-        SlasherCommitment storage slasherCommitment = operator
-            .slasherCommitments[slasher];
+       SlasherCommitment storage slasherCommitment = operator.slasherCommitments[slasher];
 
         // Check if already opted out or never opted in
         if (slasherCommitment.optedOutAt >= slasherCommitment.optedInAt) {
@@ -244,12 +240,7 @@ contract Registry is IRegistry {
         }
 
         // Verify the registration is part of the registry
-        uint256 verifiedCollateralGwei = _verifyMerkleProof(
-            registrationRoot,
-            keccak256(abi.encode(reg, owner)),
-            proof,
-            leafIndex
-        );
+        uint256 verifiedCollateralGwei = _verifyMerkleProof(registrationRoot,keccak256(abi.encode(reg, owner)),proof,leafIndex);
 
         // 0 collateral implies the registration was not part of the registry
         if (verifiedCollateralGwei == 0) {
@@ -318,8 +309,7 @@ contract Registry is IRegistry {
     ) external returns (uint256 slashAmountGwei) {
         Operator storage operator = registrations[registrationRoot];
         bytes32 slashingDigest = keccak256(
-            abi.encode(delegation, commitment, registrationRoot)
-        );
+            abi.encode(delegation, commitment, registrationRoot));
 
         // Prevent slashing with same inputs - MOVED TO START
         if (slashedBefore[slashingDigest]) {
@@ -332,9 +322,8 @@ contract Registry is IRegistry {
         }
 
         // Operator is not liable for slashings after unregister and the delay has passed
-        if (
-            operator.unregisteredAt != type(uint32).max &&
-            block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
+       if (
+            operator.unregisteredAt != type(uint32).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
         ) {
             revert OperatorAlreadyUnregistered();
         }
@@ -451,7 +440,7 @@ contract Registry is IRegistry {
         delete operator.slasherCommitments[slasher];
 
         // Call the Slasher contract to slash the operator
-       slashAmountGwei = ISlasher(slasher).slashFromOptIn(commitment.commitment, evidence, msg.sender);
+      slashAmountGwei = ISlasher(slasher).slashFromOptIn(commitment.commitment, evidence, msg.sender);
 
         // Prevent slashing more than the operator's collateral
         if (slashAmountGwei > operator.collateralGwei) {
@@ -622,10 +611,7 @@ contract Registry is IRegistry {
 
         // Store the updated collateral value in the history
         operator.collateralHistory.push(
-            CollateralRecord({
-                timestamp: uint64(block.timestamp),
-                collateralValue: operator.collateralGwei
-            })
+            CollateralRecord({ timestamp: uint64(block.timestamp), collateralValue: operator.collateralGwei })
         );
 
         emit CollateralAdded(registrationRoot, operator.collateralGwei);
@@ -664,9 +650,7 @@ contract Registry is IRegistry {
         delete registrations[registrationRoot];
 
         // Transfer to operator
-        (bool success, ) = operatorOwner.call{value: collateralGwei * 1 gwei}(
-            ""
-        );
+        (bool success,) = operatorOwner.call{ value: collateralGwei * 1 gwei }("");
         if (!success) {
             revert EthTransferFailed();
         }
@@ -705,13 +689,12 @@ contract Registry is IRegistry {
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param timestamp The timestamp to retrieve the collateral value for
     /// @return collateralGwei The collateral amount in GWEI at the closest recorded timestamp
-  function getHistoricalCollateral(bytes32 registrationRoot, uint256 timestamp)
+ function getHistoricalCollateral(bytes32 registrationRoot, uint256 timestamp)
         external
         view
         returns (uint256 collateralGwei)
     {
-        CollateralRecord[] storage records = registrations[registrationRoot]
-            .collateralHistory;
+        CollateralRecord[] storage records = registrations[registrationRoot].collateralHistory;
         if (records.length == 0) {
             return 0;
         }
@@ -752,7 +735,7 @@ contract Registry is IRegistry {
     /// @param proof The merkle proof to verify the operator's key is in the registry
     /// @param leafIndex The index of the leaf in the merkle tree
     /// @return collateralGwei The collateral amount in GWEI
-     function verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
+    function verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
         external
         view
         returns (uint256 collateralGwei)
@@ -764,10 +747,11 @@ contract Registry is IRegistry {
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param slasher The address of the slasher to check
     /// @return slasherCommitment The slasher commitment (default values if not opted in)
-    function getSlasherCommitment(
-        bytes32 registrationRoot,
-        address slasher
-    ) external view returns (SlasherCommitment memory slasherCommitment) {
+    function getSlasherCommitment(bytes32 registrationRoot, address slasher)
+        external
+        view
+        returns (SlasherCommitment memory slasherCommitment)
+    {
         Operator storage operator = registrations[registrationRoot];
         if (operator.registeredAt == 0) {
             revert NotRegisteredKey();
@@ -801,23 +785,11 @@ contract Registry is IRegistry {
         bytes32[] calldata proof,
         uint256 leafIndex,
         address slasher
-    )
-        external
-        view
-        returns (
-            SlasherCommitment memory slasherCommitment,
-            uint256 collateralGwei
-        )
-    {
+     ) external view returns (SlasherCommitment memory slasherCommitment, uint256 collateralGwei) {
         Operator storage operator = registrations[registrationRoot];
         slasherCommitment = operator.slasherCommitments[slasher];
 
-        collateralGwei = _verifyMerkleProof(
-            registrationRoot,
-            keccak256(abi.encode(reg)),
-            proof,
-            leafIndex
-        );
+        collateralGwei = _verifyMerkleProof(registrationRoot, keccak256(abi.encode(reg)), proof, leafIndex);
     }
 
     /**
@@ -830,10 +802,7 @@ contract Registry is IRegistry {
     /// @dev Leaves are created by abi-encoding the `Registration` structs, then hashing with keccak256.
     /// @param regs The array of `Registration` structs to merkleize
     /// @return registrationRoot The merkle root of the registration
-    function _merkleizeRegistrationsWithOwner(
-        Registration[] calldata regs,
-        address owner
-    ) internal returns (bytes32 registrationRoot) {
+    function _merkleizeRegistrations(Registration[] calldata regs) internal returns (bytes32 registrationRoot) {
         bytes32[] memory leaves = new bytes32[](regs.length);
         for (uint256 i = 0; i < regs.length; i++) {
             leaves[i] = keccak256(abi.encode(regs[i], owner));
@@ -884,7 +853,7 @@ contract Registry is IRegistry {
         });
         bytes32 leaf = keccak256(abi.encode(reg));
 
-       collateralGwei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
+      collateralGwei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
 
         if (collateralGwei == 0) {
             revert NotRegisteredKey();
@@ -893,7 +862,7 @@ contract Registry is IRegistry {
         // Reconstruct Delegation message
         bytes memory message = abi.encode(delegation.delegation);
 
-     if (!BLS.verify(message, delegation.signature, delegation.delegation.proposer, DELEGATION_DOMAIN_SEPARATOR)) {
+    if (!BLS.verify(message, delegation.signature, delegation.delegation.proposer, DELEGATION_DOMAIN_SEPARATOR)) {
             revert DelegationSignatureInvalid();
         }
     }

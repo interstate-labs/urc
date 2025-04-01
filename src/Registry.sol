@@ -814,7 +814,7 @@ contract Registry is IRegistry {
     /// @param proof The merkle proof to verify the operator's key is in the registry
     /// @param leafIndex The index of the leaf in the merkle tree
     /// @return collateralGwei The collateral amount in GWEI
- function _verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
+    function _verifyMerkleProof(bytes32 registrationRoot, bytes32 leaf, bytes32[] calldata proof, uint256 leafIndex)
         internal
         view
         returns (uint256 collateralGwei)
@@ -849,7 +849,7 @@ contract Registry is IRegistry {
         });
         bytes32 leaf = keccak256(abi.encode(reg));
 
-     collateralGwei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
+        collateralGwei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
 
         if (collateralGwei == 0) {
             revert NotRegisteredKey();
@@ -868,7 +868,7 @@ contract Registry is IRegistry {
     /// @param amountGwei The amount of GWEI to be burned
     function _burnGwei(uint256 amountGwei) internal {
         // Burn the slash amount
-  (bool success,) = BURNER_ADDRESS.call{ value: amountGwei * 1 gwei }("");
+        (bool success,) = BURNER_ADDRESS.call{ value: amountGwei * 1 gwei }("");
         if (!success) {
             revert EthTransferFailed();
         }

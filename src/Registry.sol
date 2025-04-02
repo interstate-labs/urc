@@ -284,7 +284,7 @@ contract Registry is IRegistry {
             success := call(gas(), challenger, MIN_COLLATERAL, 0, 0, 0, 0)
         }
 
-    if (!success) {
+        if (!success) {
             revert EthTransferFailed();
         }
 
@@ -853,7 +853,11 @@ contract Registry is IRegistry {
     /// @dev Leaves are created by abi-encoding the `Registration` structs, then hashing with keccak256.
     /// @param regs The array of `Registration` structs to merkleize
     /// @return registrationRoot The merkle root of the registration
-    function _merkleizeRegistrationsWithOwner(Registration[] calldata regs, address owner) internal pure returns (bytes32 registrationRoot) {
+    function _merkleizeRegistrationsWithOwner(Registration[] calldata regs, address owner)
+        internal
+        pure
+        returns (bytes32 registrationRoot)
+    {
         // Create leaves array with padding
         bytes32[] memory leaves = new bytes32[](regs.length);
 

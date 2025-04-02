@@ -244,7 +244,7 @@ contract Registry is IRegistry {
     ) external returns (uint256 slashedCollateralWei) {
         Operator storage operator = registrations[registrationRoot];
         address owner = operator.owner;
-        uint256 collateralGwei = operator.collateralGwei;
+        uint256 collateralWei = operator.collateralWei;
 
         // Can only slash registrations within the fraud proof window
         if (block.number > operator.registeredAt + FRAUD_PROOF_WINDOW) {
@@ -277,15 +277,20 @@ contract Registry is IRegistry {
 
         // Transfer to the challenger first - this ensures that even if the owner is malicious,
         // the challenger still gets their reward
-        (bool success,) = msg.sender.call{ value: challengerReward }("");
+        // Transfer to the challenger
+        bool success;
+        address challenger = msg.sender;
+        assembly ("memory-safe") {
+            success := call(gas(), challenger, MIN_COLLATERAL, 0, 0, 0, 0)
+        }
 
-        if (!success) {
+    if (!success) {
             revert EthTransferFailed();
         }
 
         // Burn the remaining collateral instead of returning to potentially malicious owner
-        uint256 remainingWei = uint256(collateralGwei) * 1 gwei - challengerReward;
-        _burnGwei(remainingWei / 1 gwei);
+        uint256 remainingWei = collateralWei - challengerReward;
+        _burnETH(remainingWei);
 
         emit OperatorSlashed(SlashingType.Fraud, registrationRoot, owner, msg.sender, address(this), challengerReward);
 
@@ -376,10 +381,10 @@ contract Registry is IRegistry {
         }
 
         // Decrement operator's collateral - MOVED BEFORE BURNING
-        operator.collateralGwei -= uint56(slashAmountGwei);
+        operator.collateralWei -= uint80(slashAmountWei);
 
         // Burn the slashed amount
-        _burnGwei(slashAmountGwei);
+        _burnETH(slashAmountWei);
 
         emit OperatorSlashed(
             SlashingType.Commitment,
@@ -467,10 +472,10 @@ contract Registry is IRegistry {
         }
 
         // Decrement operator's collateral - MOVED BEFORE BURNING
-        operator.collateralGwei -= uint56(slashAmountGwei);
+        operator.collateralWei -= uint80(slashAmountWei);
 
         // Burn the slashed amount
-        _burnGwei(slashAmountGwei);
+        _burnETH(slashAmountWei);
 
         // Add searcher compensation
         uint256 searcherReward = MIN_COLLATERAL / 2; // Or other appropriate amount
@@ -480,7 +485,7 @@ contract Registry is IRegistry {
         }
 
         emit OperatorSlashed(
-            SlashingType.Commitment, registrationRoot, operator.owner, msg.sender, slasher, slashAmountGwei
+            SlashingType.Commitment, registrationRoot, operator.owner, msg.sender, slasher, slashAmountWei
         );
     }
 
@@ -571,7 +576,7 @@ contract Registry is IRegistry {
         }
 
         // Calculate slash amount - must be significant enough to be a real penalty
-        slashAmountGwei = MIN_COLLATERAL / 1 gwei;
+        slashAmountWei = MIN_COLLATERAL;
 
         // Prevent same slashing from occurring again - MOVED BEFORE ANY TRANSFERS
         slashedBefore[slashingDigest] = true;
@@ -584,24 +589,25 @@ contract Registry is IRegistry {
         operator.collateralWei -= uint80(slashAmountWei);
 
         // Split the slashed amount: 50% burned, 50% to challenger
-        uint256 challengerReward = (slashAmountGwei * 1 gwei) / 2;
-        uint256 burnAmount = slashAmountGwei * 1 gwei - challengerReward;
+        uint256 challengerReward = slashAmountWei / 2;
+        uint256 burnAmount = slashAmountWei - challengerReward;
 
         // Transfer reward to the challenger
-        (bool success,) = msg.sender.call{ value: challengerReward }("");
+        // ToDo confirm this transfers an amount in gwei and not wei
+        (bool success,) = msg.sender.call{ value: challengerReward * 1 gwei }("");
 
         if (!success) {
             revert EthTransferFailed();
         }
 
         // Burn the rest
-        _burnGwei(burnAmount / 1 gwei);
+        _burnETH(burnAmount);
 
         emit OperatorSlashed(
-            SlashingType.Equivocation, registrationRoot, operator.owner, msg.sender, address(this), slashAmountGwei
+            SlashingType.Equivocation, registrationRoot, operator.owner, msg.sender, address(this), slashAmountWei
         );
 
-        return slashAmountGwei;
+        return slashAmountWei;
     }
 
     /**
@@ -718,8 +724,10 @@ contract Registry is IRegistry {
         operator.deleted = true;
 
         // Transfer collateral to owner
-
-        (bool success,) = operatorOwner.call{ value: collateralGwei * 1 gwei }("");
+        bool success;
+        assembly ("memory-safe") {
+            success := call(gas(), owner, collateralWei, 0, 0, 0, 0)
+        }
 
         if (!success) {
             revert EthTransferFailed();
@@ -845,13 +853,15 @@ contract Registry is IRegistry {
     /// @dev Leaves are created by abi-encoding the `Registration` structs, then hashing with keccak256.
     /// @param regs The array of `Registration` structs to merkleize
     /// @return registrationRoot The merkle root of the registration
-
-    function _merkleizeRegistrations(Registration[] calldata regs) internal returns (bytes32 registrationRoot) {
+    function _merkleizeRegistrationsWithOwner(Registration[] calldata regs, address owner) internal pure returns (bytes32 registrationRoot) {
+        // Create leaves array with padding
         bytes32[] memory leaves = new bytes32[](regs.length);
+
+        // Create leaf nodes by hashing Registration structs
         for (uint256 i = 0; i < regs.length; i++) {
             leaves[i] = keccak256(abi.encode(regs[i], owner));
-            emit KeyRegistered(i, regs[i], leaves[i]);
         }
+
         registrationRoot = MerkleTree.generateTree(leaves);
     }
 

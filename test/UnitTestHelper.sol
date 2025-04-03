@@ -55,10 +55,10 @@ contract UnitTestHelper is Test {
         assertEq(operatorData.slashedAt, expectedSlashedAt, "Wrong slashed block");
     }
 
-    function _hashToLeaves(IRegistry.Registration[] memory _registrations) internal pure returns (bytes32[] memory) {
+    function _hashToLeaves(IRegistry.Registration[] memory _registrations, address _owner) internal pure returns (bytes32[] memory) {
         bytes32[] memory leaves = new bytes32[](_registrations.length);
         for (uint256 i = 0; i < _registrations.length; i++) {
-            leaves[i] = keccak256(abi.encode(_registrations[i]));
+            leaves[i] = keccak256(abi.encode(_registrations[i], _owner));
         }
         return leaves;
     }

@@ -65,7 +65,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
         bytes memory evidence = "";
@@ -134,7 +134,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         ISlasher.SignedCommitment memory signedCommitment =
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
         bytes memory evidence = "";
@@ -209,7 +209,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         ISlasher.SignedDelegation memory badSignedDelegation =
             signDelegation(SECRET_KEY_2, result.signedDelegation.delegation);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
 
@@ -244,7 +244,7 @@ contract SlashCommitmentTester is UnitTestHelper {
         ISlasher.SignedCommitment memory signedCommitment =
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
 
@@ -281,7 +281,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
         bytes memory evidence = "";
@@ -372,7 +372,7 @@ contract SlashCommitmentTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
         bytes memory evidence = "";
@@ -722,7 +722,7 @@ contract SlashEquivocationTester is UnitTestHelper {
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
 
@@ -777,7 +777,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
         // Create second delegation with different metadata
@@ -862,7 +862,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
         vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
@@ -894,7 +894,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
         // Create second delegation with different slot
@@ -937,7 +937,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
         // Create second delegation
@@ -1002,7 +1002,7 @@ contract SlashEquivocationTester is UnitTestHelper {
 
         RegisterAndDelegateResult memory result = registerAndDelegate(params);
 
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
         // Create second delegation
@@ -1078,7 +1078,7 @@ contract SlashReentrantTester is UnitTestHelper {
             basicCommitment(params.committerSecretKey, params.slasher, "");
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
         // skip past fraud proof window
@@ -1188,7 +1188,7 @@ contract SlashConditionTester is UnitTestHelper {
         );
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
 
@@ -1245,7 +1245,7 @@ contract SlashConditionTester is UnitTestHelper {
         );
 
         // Setup proof
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
 

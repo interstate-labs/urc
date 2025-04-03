@@ -281,7 +281,7 @@ contract Registry is IRegistry {
         // Burn half of the MIN_COLLATERAL amount and reward the challenger the other half
         _rewardAndBurn(MIN_COLLATERAL / 2, msg.sender);
 
-        emit OperatorSlashed(SlashingType.Fraud, registrationRoot, owner, msg.sender, address(this), challengerReward);
+        emit OperatorSlashed(SlashingType.Fraud, registrationRoot, owner, msg.sender, address(this), MIN_COLLATERAL / 2);
 
         return MIN_COLLATERAL;
     }
@@ -824,7 +824,7 @@ contract Registry is IRegistry {
      */
 
     /// @notice Merkleizes an array of `Registration` structs
-    /// @dev Leaves are created by abi-encoding the `Registration` structs, then hashing with keccak256.
+    /// @dev Leaves are created by abi-encoding the `Registration` structs with the owner address, then hashing with keccak256.
     /// @param regs The array of `Registration` structs to merkleize
     /// @return registrationRoot The merkle root of the registration
     function _merkleizeRegistrationsWithOwner(Registration[] calldata regs, address owner)
@@ -837,14 +837,11 @@ contract Registry is IRegistry {
 
         // Create leaf nodes by hashing Registration structs
         for (uint256 i = 0; i < regs.length; i++) {
-            leaves[i] = keccak256(abi.encode(regs[i]));
+            leaves[i] = keccak256(abi.encode(regs[i], owner));
         }
 
         // Merkleize the leaves
-        bytes32 treeRoot = MerkleTree.generateTree(leaves);
-
-        // Hash the tree root with the owner address to create the registration root
-        registrationRoot = keccak256(abi.encode(treeRoot, owner));
+        registrationRoot = MerkleTree.generateTree(leaves);
     }
 
     /// @notice Verifies a merkle proof against a given `registrationRoot`

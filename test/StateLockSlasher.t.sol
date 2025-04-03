@@ -127,7 +127,7 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
         result = registerAndDelegate(params);
     }
 
-    function setupSlash(uint256 id)
+    function setupSlash(uint256 id, address owner)
         public
         returns (
             RegisterAndDelegateResult memory result,
@@ -136,16 +136,13 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
         )
     {
         uint256 exclusionBlockNumber = 20_785_012;
-        // Create new keypair and fund wallet
-        (address alice, uint256 alicePK) = makeAddrAndKey(string.concat("alice_", vm.toString(id)));
-        vm.deal(alice, 100 ether); // Give alice some ETH
 
         // Advance before the fraud proof window
         vm.roll(exclusionBlockNumber - registry.FRAUD_PROOF_WINDOW());
         vm.warp(exclusionBlockNumber - registry.FRAUD_PROOF_WINDOW() * 12);
 
         // Register and delegate
-        result = setupRegistration(alice, delegate, 9994114 - 100);
+        result = setupRegistration(owner, delegate, 9994114 - 100);
 
         // Advance over registration fraud proof window to the target slot
         vm.roll(exclusionBlockNumber);
@@ -187,15 +184,19 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
     }
 
     function test_slash() public {
+        // Create new keypair and fund wallet
+        address alice = makeAddr("alice");
+        vm.deal(alice, 100 ether); // Give alice some ETH
+
         // Register at URC and generate slashable evidence
         (
             RegisterAndDelegateResult memory result,
             ISlasher.SignedCommitment memory signedCommitment,
             bytes memory evidence
-        ) = setupSlash(1);
+        ) = setupSlash(1, alice);
 
         // Merkle proof for URC registration
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, alice);
         uint256 leafIndex = 0;
         bytes32[] memory registrationProof = MerkleTree.generateProof(leaves, leafIndex);
 

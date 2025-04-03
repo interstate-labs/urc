@@ -37,6 +37,8 @@ interface IRegistry {
         uint48 slashedAt;
         /// A field to simulate deletion of the operator, since deleting a struct with a nested mapping is not safe
         bool deleted;
+        /// Whether the operator has equivocated or not
+        bool equivocated;
         /// Mapping to track opt-in and opt-out status for proposer commitment protocols
         mapping(address slasher => SlasherCommitment) slasherCommitments;
         /// Historical collateral records
@@ -154,6 +156,8 @@ interface IRegistry {
     error InvalidDelegation();
     error DifferentSlots();
     error DelegationsAreSame();
+    error OperatorAlreadyEquivocated();
+    error TimestampTooOld();
     error AlreadyOptedIn();
     error NotOptedIn();
     error OptInDelayNotMet();

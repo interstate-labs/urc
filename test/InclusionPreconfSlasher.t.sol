@@ -230,7 +230,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         vm.warp(block.timestamp + slasher.CHALLENGE_WINDOW() + 1);
 
         // Merkle proof for URC registration
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         bytes32[] memory registrationProof = MerkleTree.generateProof(
             leaves,
             0 // leaf index
@@ -281,7 +281,7 @@ contract InclusionPreconfSlasherTest is UnitTestHelper, PreconfStructs {
         vm.warp(block.timestamp + slasher.CHALLENGE_WINDOW() + 1);
 
         // Merkle proof for URC registration
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
         uint256 leafIndex = 0;
         bytes32[] memory registrationProof = MerkleTree.generateProof(leaves, leafIndex);
 

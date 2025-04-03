@@ -55,10 +55,14 @@ contract UnitTestHelper is Test {
         assertEq(operatorData.slashedAt, expectedSlashedAt, "Wrong slashed block");
     }
 
-    function _hashToLeaves(IRegistry.Registration[] memory _registrations) internal pure returns (bytes32[] memory) {
+    function _hashToLeaves(IRegistry.Registration[] memory _registrations, address _owner)
+        internal
+        pure
+        returns (bytes32[] memory)
+    {
         bytes32[] memory leaves = new bytes32[](_registrations.length);
         for (uint256 i = 0; i < _registrations.length; i++) {
-            leaves[i] = keccak256(abi.encode(_registrations[i]));
+            leaves[i] = keccak256(abi.encode(_registrations[i], _owner));
         }
         return leaves;
     }
@@ -111,6 +115,7 @@ contract UnitTestHelper is Test {
         uint48 unregisteredAt;
         uint48 slashedAt;
         bool deleted;
+        bool equivocated;
     }
 
     function getRegistrationData(bytes32 registrationRoot) public view returns (OperatorData memory) {
@@ -121,7 +126,8 @@ contract UnitTestHelper is Test {
             uint48 registeredAt,
             uint48 unregisteredAt,
             uint48 slashedAt,
-            bool deleted
+            bool deleted,
+            bool equivocated
         ) = registry.registrations(registrationRoot);
 
         return OperatorData({
@@ -131,7 +137,8 @@ contract UnitTestHelper is Test {
             registeredAt: registeredAt,
             unregisteredAt: unregisteredAt,
             slashedAt: slashedAt,
-            deleted: deleted
+            deleted: deleted,
+            equivocated: equivocated
         });
     }
 

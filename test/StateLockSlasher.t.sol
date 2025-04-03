@@ -194,8 +194,10 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
             bytes memory evidence
         ) = setupSlash(1);
 
+        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+
         // Merkle proof for URC registration
-        bytes32[] memory leaves = _hashToLeaves(result.registrations);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operatorData.owner);
         uint256 leafIndex = 0;
         bytes32[] memory registrationProof = MerkleTree.generateProof(leaves, leafIndex);
 
@@ -218,7 +220,7 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
         _verifySlashCommitmentBalances(challenger, slashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 
         // Retrieve operator data
-        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+        operatorData = getRegistrationData(result.registrationRoot);
 
         // Verify operator's slashedAt is set
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");

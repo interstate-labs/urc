@@ -348,7 +348,7 @@ contract Registry is IRegistry {
 
         // Verify the delegation was signed by the operator's BLS key
         // This is a sanity check to ensure the delegation is valid
-        uint256 collateralWei = _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegation);
+        uint256 collateralWei = _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegation, operator.owner);
 
         // Verify the commitment was signed by the commitment key from the Delegation
         address committer = ECDSA.recover(keccak256(abi.encode(commitment.commitment)), commitment.signature);
@@ -545,8 +545,8 @@ contract Registry is IRegistry {
         }
 
         // Verify both delegations were signed by the operator's BLS key
-        _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationOne);
-        _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationTwo);
+        _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationOne, operator.owner);
+        _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegationTwo, operator.owner);
 
         // Verify the delegations are for the same slot
         if (delegationOne.delegation.slot != delegationTwo.delegation.slot) {
@@ -876,12 +876,13 @@ contract Registry is IRegistry {
         BLS.G2Point calldata registrationSignature,
         bytes32[] calldata proof,
         uint256 leafIndex,
-        ISlasher.SignedDelegation calldata delegation
+        ISlasher.SignedDelegation calldata delegation,
+        address owner
     ) internal view returns (uint256 collateralWei) {
         // Reconstruct leaf using pubkey in SignedDelegation to check equivalence
         Registration memory reg =
             Registration({ pubkey: delegation.delegation.proposer, signature: registrationSignature });
-        bytes32 leaf = keccak256(abi.encode(reg));
+        bytes32 leaf = keccak256(abi.encode(reg, owner));
 
         collateralWei = _verifyMerkleProof(registrationRoot, leaf, proof, leafIndex);
 

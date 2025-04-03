@@ -127,7 +127,7 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
         result = registerAndDelegate(params);
     }
 
-    function setupSlash(uint256 id, address owner)
+    function setupSlash(uint256 id)
         public
         returns (
             RegisterAndDelegateResult memory result,
@@ -136,13 +136,16 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
         )
     {
         uint256 exclusionBlockNumber = 20_785_012;
+        // Create new keypair and fund wallet
+        (address alice, uint256 alicePK) = makeAddrAndKey(string.concat("alice_", vm.toString(id)));
+        vm.deal(alice, 100 ether); // Give alice some ETH
 
         // Advance before the fraud proof window
         vm.roll(exclusionBlockNumber - registry.FRAUD_PROOF_WINDOW());
         vm.warp(exclusionBlockNumber - registry.FRAUD_PROOF_WINDOW() * 12);
 
         // Register and delegate
-        result = setupRegistration(owner, delegate, 9994114 - 100);
+        result = setupRegistration(alice, delegate, 9994114 - 100);
 
         // Advance over registration fraud proof window to the target slot
         vm.roll(exclusionBlockNumber);
@@ -184,19 +187,17 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
     }
 
     function test_slash() public {
-        // Create new keypair and fund wallet
-        address alice = makeAddr("alice");
-        vm.deal(alice, 100 ether); // Give alice some ETH
-
         // Register at URC and generate slashable evidence
         (
             RegisterAndDelegateResult memory result,
             ISlasher.SignedCommitment memory signedCommitment,
             bytes memory evidence
-        ) = setupSlash(1, alice);
+        ) = setupSlash(1);
+
+        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
 
         // Merkle proof for URC registration
-        bytes32[] memory leaves = _hashToLeaves(result.registrations, alice);
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operatorData.owner);
         uint256 leafIndex = 0;
         bytes32[] memory registrationProof = MerkleTree.generateProof(leaves, leafIndex);
 
@@ -219,7 +220,7 @@ contract StateLockSlasherTest is UnitTestHelper, PreconfStructs {
         _verifySlashCommitmentBalances(challenger, slashAmountWei, 0, challengerBalanceBefore, urcBalanceBefore);
 
         // Retrieve operator data
-        OperatorData memory operatorData = getRegistrationData(result.registrationRoot);
+        operatorData = getRegistrationData(result.registrationRoot);
 
         // Verify operator's slashedAt is set
         assertEq(operatorData.slashedAt, block.number, "slashedAt not set");

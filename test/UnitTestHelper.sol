@@ -19,6 +19,7 @@ contract UnitTestHelper is Test {
     // Preset secret keys for deterministic testing
     uint256 constant SECRET_KEY_1 = 12345;
     uint256 constant SECRET_KEY_2 = 67890;
+    uint256 constant SECRET_KEY_3 = 13579;
 
     /// @dev Helper to create a BLS signature for a registration
     function _registrationSignature(uint256 secretKey, address owner) internal view returns (BLS.G2Point memory) {
@@ -63,6 +64,14 @@ contract UnitTestHelper is Test {
         return leaves;
     }
 
+    function _hashToLeaves(IRegistry.Registration[] memory _registrations, address owner) internal pure returns (bytes32[] memory) {
+        bytes32[] memory leaves = new bytes32[](_registrations.length);
+        for (uint256 i = 0; i < _registrations.length; i++) {
+            leaves[i] = keccak256(abi.encode(_registrations[i], owner));
+        }
+        return leaves;
+    }
+
     function _setupSingleRegistration(uint256 secretKey, address owner)
         internal
         view
@@ -82,7 +91,7 @@ contract UnitTestHelper is Test {
         uint256 _challengerBalanceBefore,
         uint256 _operatorBalanceBefore,
         uint256 _urcBalanceBefore
-    ) internal view {
+    ) internal virtual {
         assertEq(_challenger.balance, _challengerBalanceBefore + _rewardAmount, "challenger didn't receive reward");
         assertEq(
             _operator.balance,
@@ -98,7 +107,7 @@ contract UnitTestHelper is Test {
         uint256 _rewardAmount,
         uint256 _challengerBalanceBefore,
         uint256 _urcBalanceBefore
-    ) internal view {
+    ) internal {
         assertEq(_challenger.balance, _challengerBalanceBefore + _rewardAmount, "challenger didn't receive reward");
         assertEq(address(registry).balance, _urcBalanceBefore - _slashedAmount - _rewardAmount, "urc balance incorrect");
     }
@@ -290,6 +299,14 @@ contract ReentrantContract {
         bytes32[] memory leaves = new bytes32[](_registrations.length);
         for (uint256 i = 0; i < _registrations.length; i++) {
             leaves[i] = keccak256(abi.encode(_registrations[i]));
+        }
+        return leaves;
+    }
+
+    function _hashToLeaves(IRegistry.Registration[] memory _registrations, address owner) internal pure returns (bytes32[] memory) {
+        bytes32[] memory leaves = new bytes32[](_registrations.length);
+        for (uint256 i = 0; i < _registrations.length; i++) {
+            leaves[i] = keccak256(abi.encode(_registrations[i], owner));
         }
         return leaves;
     }

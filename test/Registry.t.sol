@@ -67,7 +67,7 @@ contract RegisterTester is UnitTestHelper {
         );
 
         // generate merkle proof
-        bytes32[] memory leaves = _hashToLeaves(registrations);
+        bytes32[] memory leaves = _hashToLeaves(registrations, operator);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
         uint256 gotCollateral = registry.verifyMerkleProof(
@@ -94,7 +94,7 @@ contract RegisterTester is UnitTestHelper {
             registrationRoot, operator, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
         );
 
-        bytes32[] memory leaves = _hashToLeaves(registrations);
+        bytes32[] memory leaves = _hashToLeaves(registrations, operator);
 
         // Test first proof path
         uint256 leafIndex = 0;
@@ -126,7 +126,7 @@ contract RegisterTester is UnitTestHelper {
             registrationRoot, operator, uint56(collateral / 1 gwei), uint32(block.number), type(uint32).max, 0
         );
 
-        bytes32[] memory leaves = _hashToLeaves(registrations);
+        bytes32[] memory leaves = _hashToLeaves(registrations, operator);
 
         // Test all proof paths
         for (uint256 i = 0; i < leaves.length; i++) {
@@ -148,7 +148,7 @@ contract RegisterTester is UnitTestHelper {
 
         bytes32 registrationRoot = registry.register{ value: collateral }(registrations, operator);
 
-        bytes32[] memory leaves = _hashToLeaves(registrations);
+        bytes32[] memory leaves = _hashToLeaves(registrations, operator);
 
         // Test all proof paths
         for (uint256 i = 0; i < leaves.length; i++) {
@@ -436,6 +436,8 @@ contract AddCollateralTester is UnitTestHelper {
     function test_addCollateral(uint56 addAmount) public {
         uint256 collateral = registry.MIN_COLLATERAL();
         vm.assume((addAmount + collateral) / 1 gwei < uint256(2 ** 56));
+        // Ensure amount is a multiple of 1 gwei to avoid DustAmountNotAllowed
+        addAmount = uint56((uint256(addAmount) / 1 gwei) * 1 gwei);
 
         IRegistry.Registration[] memory registrations = _setupSingleRegistration(SECRET_KEY_1, operator);
 
@@ -507,10 +509,11 @@ contract SlashRegistrationTester is UnitTestHelper {
         );
 
         // generate merkle proof
-        bytes32[] memory leaves = _hashToLeaves(registrations);
+        bytes32[] memory leaves = _hashToLeaves(registrations, operator);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
         uint256 operatorBalanceBefore = operator.balance;
+        uint256 challengerBalanceBefore = challenger.balance;
         uint256 urcBalanceBefore = address(registry).balance;
 
         vm.startPrank(challenger);
@@ -522,12 +525,12 @@ contract SlashRegistrationTester is UnitTestHelper {
         );
 
         _verifySlashingBalances(
-            operator,
             challenger,
+            operator,
             0,
             rewardCollateralWei,
             collateral,
-            operatorBalanceBefore,
+            challengerBalanceBefore,
             operatorBalanceBefore,
             urcBalanceBefore
         );
@@ -558,7 +561,7 @@ contract SlashRegistrationTester is UnitTestHelper {
         );
 
         // generate merkle proof
-        bytes32[] memory leaves = _hashToLeaves(registrations);
+        bytes32[] memory leaves = _hashToLeaves(registrations, thief);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
         uint256 thiefBalanceBefore = thief.balance;
@@ -579,8 +582,8 @@ contract SlashRegistrationTester is UnitTestHelper {
             0,
             rewardCollateralWei,
             collateral,
-            thiefBalanceBefore,
             operatorBalanceBefore,
+            thiefBalanceBefore,
             urcBalanceBefore
         );
 
@@ -607,7 +610,7 @@ contract SlashRegistrationTester is UnitTestHelper {
         );
 
         // Create proof for operator's registration
-        bytes32[] memory leaves = _hashToLeaves(registrations);
+        bytes32[] memory leaves = _hashToLeaves(registrations, thief);
         uint256 leafIndex = 0;
         bytes32[] memory proof = MerkleTree.generateProof(leaves, leafIndex);
 
@@ -624,8 +627,8 @@ contract SlashRegistrationTester is UnitTestHelper {
             0,
             rewardCollateralWei,
             collateral,
-            thiefBalanceBefore,
             operatorBalanceBefore,
+            thiefBalanceBefore,
             urcBalanceBefore
         );
     }
@@ -645,7 +648,7 @@ contract SlashRegistrationTester is UnitTestHelper {
             thief // submit different withdrawal address than the one signed by validator keys
         );
 
-        bytes32[] memory leaves = _hashToLeaves(registrations);
+        bytes32[] memory leaves = _hashToLeaves(registrations, thief);
 
         uint256 thiefBalanceBefore = thief.balance;
         uint256 operatorBalanceBefore = operator.balance;
@@ -673,6 +676,26 @@ contract SlashRegistrationTester is UnitTestHelper {
             operatorBalanceBefore = operator.balance;
             urcBalanceBefore = address(registry).balance;
         }
+    }
+
+    function _verifySlashingBalances(
+        address _challenger,
+        address _operator,
+        uint256 _slashedAmount,
+        uint256 _rewardAmount,
+        uint256 _totalCollateral,
+        uint256 _challengerBalanceBefore,
+        uint256 _operatorBalanceBefore,
+        uint256 _urcBalanceBefore
+    ) internal override {
+        assertEq(_challenger.balance, _challengerBalanceBefore + _rewardAmount, "challenger didn't receive reward");
+        // For slashRegistration, the operator doesn't receive the remaining funds, they are burned
+        assertEq(
+            _operator.balance,
+            _operatorBalanceBefore,
+            "operator balance should remain unchanged"
+        );
+        assertEq(address(registry).balance, _urcBalanceBefore - _totalCollateral, "urc balance incorrect");
     }
 }
 
@@ -753,7 +776,7 @@ contract RentrancyTester is UnitTestHelper {
         );
 
         // generate merkle proof
-        bytes32[] memory leaves = _hashToLeaves(registrations);
+        bytes32[] memory leaves = _hashToLeaves(registrations, operator);
         bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
 
         // operator can slash the registration

@@ -853,10 +853,14 @@ contract Registry is IRegistry {
 
         // Create leaf nodes by hashing Registration structs
         for (uint256 i = 0; i < regs.length; i++) {
-            leaves[i] = keccak256(abi.encode(regs[i], owner));
+            leaves[i] = keccak256(abi.encode(regs[i]));
         }
 
-        registrationRoot = MerkleTree.generateTree(leaves);
+        // Merkleize the leaves
+        bytes32 treeRoot = MerkleTree.generateTree(leaves);
+
+        // Hash the tree root with the owner address to create the registration root
+        registrationRoot = keccak256(abi.encode(treeRoot, owner));
     }
 
     /// @notice Verifies a merkle proof against a given `registrationRoot`
@@ -894,7 +898,6 @@ contract Registry is IRegistry {
         ISlasher.SignedDelegation calldata delegation
     ) internal view returns (uint256 collateralWei) {
         // Reconstruct leaf using pubkey in SignedDelegation to check equivalence
-        // Instead of manually encoding, create a Registration struct
         Registration memory reg =
             Registration({ pubkey: delegation.delegation.proposer, signature: registrationSignature });
         bytes32 leaf = keccak256(abi.encode(reg));

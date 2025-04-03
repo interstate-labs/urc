@@ -51,11 +51,6 @@ contract Registry is IRegistry {
         payable
         returns (bytes32 registrationRoot)
     {
-        // Add dust check
-        if (msg.value % 1 gwei != 0) {
-            revert DustAmountNotAllowed();
-        }
-
         // At least MIN_COLLATERAL for sufficient reward for fraud/equivocation challenges
         if (msg.value < MIN_COLLATERAL) {
             revert InsufficientCollateral();
@@ -620,11 +615,6 @@ contract Registry is IRegistry {
     /// @dev The function will revert if the operator does not exist or if the collateral amount overflows the `collateralGwei` field.
     /// @param registrationRoot The merkle root generated and stored from the register() function
     function addCollateral(bytes32 registrationRoot) external payable {
-        // Add dust check
-        if (msg.value % 1 gwei != 0) {
-            revert DustAmountNotAllowed();
-        }
-
         Operator storage operator = registrations[registrationRoot];
 
         // Prevent reusing a deleted operator

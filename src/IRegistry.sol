@@ -154,7 +154,6 @@ interface IRegistry {
     error InvalidDelegation();
     error DifferentSlots();
     error DelegationsAreSame();
-    error DustAmountNotAllowed();
     error SlotAlreadySlashed();
     error TimestampTooOld();
     error AlreadyOptedIn();

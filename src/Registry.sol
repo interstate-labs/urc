@@ -323,8 +323,7 @@ contract Registry is IRegistry {
         Operator storage operator = registrations[registrationRoot];
         bytes32 slashingDigest = keccak256(abi.encode(delegation, commitment, registrationRoot));
 
-        // Prevent slashing with same inputs - MOVED TO START
-
+        // Prevent slashing with same inputs
         if (slashedBefore[slashingDigest]) {
             revert SlashingAlreadyOccurred();
         }
@@ -357,12 +356,12 @@ contract Registry is IRegistry {
             revert UnauthorizedCommitment();
         }
 
-        // Save timestamp only once to start the slash window - MOVED BEFORE EXTERNAL CALL
+        // Save timestamp only once to start the slash window
         if (operator.slashedAt == 0) {
             operator.slashedAt = uint32(block.number);
         }
 
-        // Prevent same slashing from occurring again - MOVED BEFORE EXTERNAL CALL
+        // Prevent same slashing from occurring again
         slashedBefore[slashingDigest] = true;
 
         // Call the Slasher contract to slash the operator
@@ -375,7 +374,7 @@ contract Registry is IRegistry {
             revert SlashAmountExceedsCollateral();
         }
 
-        // Decrement operator's collateral - MOVED BEFORE BURNING
+        // Decrement operator's collateral
         operator.collateralWei -= uint80(slashAmountWei);
 
         // Burn the slashed amount
@@ -455,7 +454,7 @@ contract Registry is IRegistry {
             operator.slashedAt = uint32(block.number);
         }
 
-        // Delete the slasher commitment before external call to prevent reentrancy
+        // Delete the slasher commitment
         delete operator.slasherCommitments[slasher];
 
         // Call the Slasher contract to slash the operator
@@ -466,7 +465,7 @@ contract Registry is IRegistry {
             revert SlashAmountExceedsCollateral();
         }
 
-        // Decrement operator's collateral - MOVED BEFORE BURNING
+        // Decrement operator's collateral
         operator.collateralWei -= uint80(slashAmountWei);
 
         // Burn the slashed amount

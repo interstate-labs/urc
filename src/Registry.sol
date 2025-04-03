@@ -221,13 +221,13 @@ contract Registry is IRegistry {
 
     /// @notice Slash an operator for submitting a fraudulent `Registration` in the register() function
     /// @dev To save BLS verification gas costs, the URC optimistically accepts registration signatures. This function allows a challenger to slash the operator by executing the BLS verification to prove the registration is fraudulent.
-    /// @dev The function will delete the operator's registration, transfer `MIN_COLLATERAL` to the caller, and return any remaining funds to the operator's withdrawal address.
+    /// @dev A successful challenge will transfer `MIN_COLLATERAL / 2` to the challenger, burn `MIN_COLLATERAL / 2`, and then allow the operator to claim their remaining collateral after `SLASH_WINDOW` blocks have elapsed from the `claimSlashedCollateral()` function.
     /// @dev The function will revert if:
-    /// @dev - The operator has already unregistered (AlreadyUnregistered)
-    /// @dev - The operator has not registered (NotRegisteredKey)
+    /// @dev - The operator has already been deleted (OperatorDeleted)
     /// @dev - The fraud proof window has expired (FraudProofWindowExpired)
+    /// @dev - The operator has not registered (NotRegisteredKey)
     /// @dev - The proof is invalid (FraudProofChallengeInvalid)
-    /// @dev - ETH transfer to challenger or owner fails (EthTransferFailed)
+    /// @dev - ETH transfer to challenger fails (EthTransferFailed)
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param reg The fraudulent Registration
     /// @param proof The merkle proof to verify the operator's key is in the registry
@@ -270,36 +270,27 @@ contract Registry is IRegistry {
             revert FraudProofChallengeInvalid();
         }
 
-        // Calculate the reward amount for the challenger
-        uint256 challengerReward = MIN_COLLATERAL;
-
-        // Prevent the Operator from being reused
-        operator.deleted = true;
-
-        // Transfer reward the challenger
-        bool success;
-        address challenger = msg.sender;
-        assembly ("memory-safe") {
-            success := call(gas(), challenger, MIN_COLLATERAL, 0, 0, 0, 0)
+        // Save timestamp only once to start the slash window
+        if (operator.slashedAt == 0) {
+            operator.slashedAt = uint48(block.number);
         }
 
-        if (!success) {
-            revert EthTransferFailed();
-        }
+        // Decrement operator's collateral
+        operator.collateralWei -= uint80(MIN_COLLATERAL);
 
-        // Burn the remaining collateral
-        uint256 remainingWei = collateralWei - challengerReward;
-        _burnETH(remainingWei);
+        // Burn half of the MIN_COLLATERAL amount and reward the challenger the other half
+        _rewardAndBurn(MIN_COLLATERAL / 2, msg.sender);
 
         emit OperatorSlashed(SlashingType.Fraud, registrationRoot, owner, msg.sender, address(this), challengerReward);
 
-        return challengerReward;
+        return MIN_COLLATERAL;
     }
 
     /// @notice Slashes an operator for breaking a commitment
     /// @dev The function verifies `proof` to first ensure the operator's BLS key is in the registry, then verifies the `signedDelegation` was signed by the same key. If the fraud proof window has passed, the URC will call the `slash()` function of the Slasher contract specified in the `signedCommitment`. The Slasher contract will determine if the operator has broken a commitment and return the amount of GWEI to be slashed at the URC.
     /// @dev The function will burn `slashAmountGwei`. It will also save the timestamp of the slashing to start the `SLASH_WINDOW` in case of multiple slashings.
     /// @dev The function will revert if:
+    /// @dev - The operator has already been deleted (OperatorDeleted)
     /// @dev - The same slashing inputs have been supplied before (SlashingAlreadyOccurred)
     /// @dev - The fraud proof window has not passed (FraudProofWindowNotMet)
     /// @dev - The operator has already unregistered (OperatorAlreadyUnregistered)
@@ -402,6 +393,7 @@ contract Registry is IRegistry {
     /// @notice Slashes an operator for breaking a commitment in a protocol they opted into via the optInToSlasher() function. The operator must have already opted into the protocol.
     /// @dev The function verifies the commitment was signed by the registered committer from the optInToSlasher() function before calling into the Slasher contract.
     /// @dev Reverts if:
+    /// @dev - The operator has already been deleted (OperatorDeleted)
     /// @dev - The fraud proof window has not passed (FraudProofWindowNotMet)
     /// @dev - The operator has already unregistered and delay passed (OperatorAlreadyUnregistered)
     /// @dev - The slash window has expired (SlashWindowExpired)
@@ -486,15 +478,17 @@ contract Registry is IRegistry {
     }
 
     /// @notice Slash an operator for equivocation (signing two different delegations for the same slot)
-    /// @dev The function will slash the operator's collateral and transfer `MIN_COLLATERAL` to the msg.sender.
+    /// @dev A successful challenge will transfer `MIN_COLLATERAL / 2` to the challenger, burn `MIN_COLLATERAL / 2`, and then allow the operator to claim their remaining collateral after `SLASH_WINDOW` blocks have elapsed from the `claimSlashedCollateral()` function.
     /// @dev Reverts if:
+    /// @dev - The operator has already been deleted (OperatorDeleted)
+    /// @dev - The operator has already equivocated (OperatorAlreadyEquivocated)
     /// @dev - The delegations are the same (DelegationsAreSame)
-    /// @dev - The slashing has already occurred (SlashingAlreadyOccurred)
     /// @dev - The fraud proof window has not passed (FraudProofWindowNotMet)
     /// @dev - The operator has already unregistered and delay passed (OperatorAlreadyUnregistered)
     /// @dev - The slash window has expired (SlashWindowExpired)
     /// @dev - Either delegation is invalid (InvalidDelegation)
     /// @dev - The delegations are for different slots (DifferentSlots)
+    /// @dev - ETH transfer to challenger fails (EthTransferFailed)
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param registrationSignature The signature from the operator's previously registered `Registration`
     /// @param proof The merkle proof to verify the operator's key is in the registry
@@ -567,32 +561,14 @@ contract Registry is IRegistry {
             operator.slashedAt = uint48(block.number);
         }
 
-        // Calculate slash amount
-        slashAmountWei = MIN_COLLATERAL;
-
         // Decrement operator's collateral
-        operator.collateralWei -= uint80(slashAmountWei);
+        operator.collateralWei -= uint80(MIN_COLLATERAL);
 
-        // Split the slashed amount: 50% burned, 50% to challenger
-        uint256 challengerReward = slashAmountWei / 2;
-        uint256 burnAmount = slashAmountWei - challengerReward;
-
-        // Transfer reward to the challenger
-        bool success;
-        address challenger = msg.sender;
-        assembly ("memory-safe") {
-            success := call(gas(), challenger, challengerReward, 0, 0, 0, 0)
-        }
-
-        if (!success) {
-            revert EthTransferFailed();
-        }
-
-        // Burn the rest
-        _burnETH(burnAmount);
+        // Burn half of the MIN_COLLATERAL amount and reward the challenger the other half
+        _rewardAndBurn(MIN_COLLATERAL / 2, msg.sender);
 
         emit OperatorSlashed(
-            SlashingType.Equivocation, registrationRoot, operator.owner, msg.sender, address(this), slashAmountWei
+            SlashingType.Equivocation, registrationRoot, operator.owner, msg.sender, address(this), MIN_COLLATERAL
         );
 
         return slashAmountWei;
@@ -605,7 +581,10 @@ contract Registry is IRegistry {
      */
 
     /// @notice Adds collateral to an Operator struct
-    /// @dev The function will revert if the operator does not exist or if the collateral amount overflows the `collateralGwei` field.
+    /// @dev The function will revert if:
+    /// @dev - The operator was deleted (OperatorDeleted)
+    /// @dev - The operator has not registered (NotRegisteredKey)
+    /// @dev - The collateral amount overflows the `collateralGwei` field (CollateralOverflow)
     /// @param registrationRoot The merkle root generated and stored from the register() function
     function addCollateral(bytes32 registrationRoot) external payable {
         Operator storage operator = registrations[registrationRoot];
@@ -634,7 +613,13 @@ contract Registry is IRegistry {
     }
 
     /// @notice Claims an operator's collateral after the unregistration delay
-    /// @dev The function will revert if the operator does not exist, if the operator has not unregistered, if the `unregistrationDelay` has not passed, or if there is no collateral to claim.
+    /// @dev The function will revert if:
+    /// @dev - The operator has already been deleted (OperatorDeleted)
+    /// @dev - The operator has not unregistered (NotUnregistered)
+    /// @dev - The `unregistrationDelay` has not passed (UnregistrationDelayNotMet)
+    /// @dev - The operator was slashed (need to call `claimSlashedCollateral()`) (SlashingAlreadyOccurred)
+    /// @dev - There is no collateral to claim (NoCollateralToClaim)
+    /// @dev - ETH transfer to operator fails (EthTransferFailed)
     /// @dev The function will transfer the operator's collateral to their registered `withdrawalAddress`.
     /// @param registrationRoot The merkle root generated and stored from the register() function
     function claimCollateral(bytes32 registrationRoot) external {
@@ -682,6 +667,12 @@ contract Registry is IRegistry {
         emit CollateralClaimed(registrationRoot, collateralWei);
     }
 
+    /// @notice Claims an operator's collateral if they have been slashed before
+    /// @dev The function will revert if:
+    /// @dev - The operator has already been deleted (OperatorDeleted)
+    /// @dev - The operator has not been slashed (NotSlashed)
+    /// @dev - The slash window has not passed (SlashWindowNotMet)
+    /// @dev - ETH transfer to operator fails (EthTransferFailed)
     function claimSlashedCollateral(bytes32 registrationRoot) external {
         Operator storage operator = registrations[registrationRoot];
 
@@ -922,5 +913,25 @@ contract Registry is IRegistry {
         if (!success) {
             revert EthTransferFailed();
         }
+    }
+
+    /// @notice Burns `amountWei` ether and rewards `amountWei` the challenger
+    /// @dev The function will revert if the transfer to the challenger fails.
+    /// @dev In total the total WEI leaving the contract is `2 * amountWei`
+    /// @param amountWei The amount of WEI to be burned and rewarded
+    /// @param challenger The address of the challenger
+    function _rewardAndBurn(uint256 amountWei, address challenger) internal {
+        // Transfer reward to the challenger
+        bool success;
+        assembly ("memory-safe") {
+            success := call(gas(), challenger, amountWei, 0, 0, 0, 0)
+        }
+
+        if (!success) {
+            revert EthTransferFailed();
+        }
+
+        // Burn the rest
+        _burnETH(amountWei);
     }
 }

@@ -111,6 +111,7 @@ contract UnitTestHelper is Test {
         uint48 unregisteredAt;
         uint48 slashedAt;
         bool deleted;
+        bool equivocated;
     }
 
     function getRegistrationData(bytes32 registrationRoot) public view returns (OperatorData memory) {
@@ -121,7 +122,8 @@ contract UnitTestHelper is Test {
             uint48 registeredAt,
             uint48 unregisteredAt,
             uint48 slashedAt,
-            bool deleted
+            bool deleted,
+            bool equivocated
         ) = registry.registrations(registrationRoot);
 
         return OperatorData({
@@ -131,7 +133,8 @@ contract UnitTestHelper is Test {
             registeredAt: registeredAt,
             unregisteredAt: unregisteredAt,
             slashedAt: slashedAt,
-            deleted: deleted
+            deleted: deleted,
+            equivocated: equivocated
         });
     }
 

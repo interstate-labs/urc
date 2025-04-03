@@ -17,9 +17,6 @@ contract Registry is IRegistry {
     /// @notice Mapping to track if a slashing has occurred before with same input
     mapping(bytes32 slashingDigest => bool) public slashedBefore;
 
-    /// @notice Mapping to track if a slot has been slashed for equivocation
-    mapping(uint64 slot => bool) public slashedSlots;
-
     // Constants
     uint256 public constant MIN_COLLATERAL = 0.1 ether;
     uint256 public constant UNREGISTRATION_DELAY = 7200; // 1 day
@@ -520,7 +517,10 @@ contract Registry is IRegistry {
             revert OperatorDeleted();
         }
 
-        bytes32 slashingDigest = keccak256(abi.encode(delegationOne, delegationTwo, registrationRoot));
+        // Prevent slashing an operator that has already equivocated
+        if (operator.equivocated) {
+            revert OperatorAlreadyEquivocated();
+        }
 
         // Verify the delegations are not identical by comparing only essential fields
         if (
@@ -530,16 +530,6 @@ contract Registry is IRegistry {
                 && delegationOne.delegation.committer == delegationTwo.delegation.committer
         ) {
             revert DelegationsAreSame();
-        }
-
-        // Prevent duplicate slashing with same inputs
-        if (slashedBefore[slashingDigest]) {
-            revert SlashingAlreadyOccurred();
-        }
-
-        // Prevent slashing a slot that has already been slashed
-        if (slashedSlots[delegationOne.delegation.slot]) {
-            revert SlotAlreadySlashed();
         }
 
         // Operator is not liable for slashings before the fraud proof window elapses
@@ -569,20 +559,16 @@ contract Registry is IRegistry {
             revert DifferentSlots();
         }
 
+        // Mark the operator as equivocated
+        operator.equivocated = true;
+
         // Save timestamp only once to start the slash window
         if (operator.slashedAt == 0) {
             operator.slashedAt = uint48(block.number);
         }
 
-        // Calculate slash amount - must be significant enough to be a real penalty
+        // Calculate slash amount
         slashAmountWei = MIN_COLLATERAL;
-
-        // Prevent same slashing from occurring again - MOVED BEFORE ANY TRANSFERS
-        slashedBefore[slashingDigest] = true;
-        slashedBefore[keccak256(abi.encode(delegationTwo, delegationOne, registrationRoot))] = true;
-
-        // Mark this slot as slashed to prevent future slashings
-        slashedSlots[delegationOne.delegation.slot] = true;
 
         // Decrement operator's collateral
         operator.collateralWei -= uint80(slashAmountWei);
@@ -592,8 +578,11 @@ contract Registry is IRegistry {
         uint256 burnAmount = slashAmountWei - challengerReward;
 
         // Transfer reward to the challenger
-        // ToDo confirm this transfers an amount in gwei and not wei
-        (bool success,) = msg.sender.call{ value: challengerReward * 1 gwei }("");
+        bool success;
+        address challenger = msg.sender;
+        assembly ("memory-safe") {
+            success := call(gas(), challenger, challengerReward, 0, 0, 0, 0)
+        }
 
         if (!success) {
             revert EthTransferFailed();

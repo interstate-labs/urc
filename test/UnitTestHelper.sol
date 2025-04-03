@@ -17,9 +17,10 @@ contract UnitTestHelper is Test {
     address thief = makeAddr("thief");
 
     // Preset secret keys for deterministic testing
-    uint256 constant SECRET_KEY_1 = 12345;
-    uint256 constant SECRET_KEY_2 = 67890;
-    uint256 constant SECRET_KEY_3 = 13579;
+    uint256 constant public SECRET_KEY_1 = 5;
+    uint256 constant public SECRET_KEY_2 = 100;
+    uint256 constant public SECRET_KEY_3 = 200;
+    address constant public BURNER_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
     /// @dev Helper to create a BLS signature for a registration
     function _registrationSignature(uint256 secretKey, address owner) internal view returns (BLS.G2Point memory) {

@@ -739,13 +739,16 @@ contract SlashEquivocationTester is UnitTestHelper {
         // skip past fraud proof window
         vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
 
-        // Sign delegation with different delegate key
+        // Get a different committer address
+        (address differentCommitter, ) = makeAddrAndKey("differentCommitter");
+
+        // Sign delegation with same delegate key but different committer
         ISlasher.Delegation memory delegationTwo = ISlasher.Delegation({
             proposer: BLS.toPublicKey(params.proposerSecretKey),
-            delegate: BLS.toPublicKey(SECRET_KEY_3), // Different delegate key
-            committer: params.committer,
+            delegate: BLS.toPublicKey(params.delegateSecretKey), // Same delegate key 
+            committer: differentCommitter, // Different committer
             slot: params.slot,
-            metadata: "different metadata"
+            metadata: "this is a completely different metadata with a different length to ensure hash difference 987654321"
         });
 
         ISlasher.SignedDelegation memory signedDelegationTwo = signDelegation(params.proposerSecretKey, delegationTwo);
@@ -908,6 +911,55 @@ contract SlashEquivocationTester is UnitTestHelper {
             0,
             result.signedDelegation,
             result.signedDelegation // Same delegation
+        );
+    }
+
+    /**
+     * @notice Test that shows that delegations with different metadata are still considered the same
+     * @dev This test demonstrates a limitation of the current implementation where metadata difference
+     * is not considered in the DelegationsAreSame check.
+     */
+    function testMetadataDifferenceStillConsideredSame() public {
+        RegisterAndDelegateParams memory params = RegisterAndDelegateParams({
+            proposerSecretKey: SECRET_KEY_1,
+            collateral: collateral,
+            owner: operator,
+            delegateSecretKey: SECRET_KEY_2,
+            committerSecretKey: committerSecretKey,
+            committer: committer,
+            slasher: address(dummySlasher),
+            metadata: "",
+            slot: uint64(UINT256_MAX)
+        });
+
+        RegisterAndDelegateResult memory result = registerAndDelegate(params);
+
+        // Create a delegation identical to the original but with different metadata
+        ISlasher.Delegation memory delegationWithDifferentMetadata = ISlasher.Delegation({
+            proposer: result.signedDelegation.delegation.proposer,
+            delegate: result.signedDelegation.delegation.delegate,
+            committer: result.signedDelegation.delegation.committer,
+            slot: result.signedDelegation.delegation.slot,
+            metadata: "different metadata"
+        });
+
+        ISlasher.SignedDelegation memory signedDelegationWithDifferentMetadata = 
+            signDelegation(params.proposerSecretKey, delegationWithDifferentMetadata);
+
+        bytes32[] memory leaves = _hashToLeaves(result.registrations, operator);
+        bytes32[] memory proof = MerkleTree.generateProof(leaves, 0);
+
+        vm.roll(block.timestamp + registry.FRAUD_PROOF_WINDOW() + 1);
+
+        vm.startPrank(challenger);
+        vm.expectRevert(IRegistry.DelegationsAreSame.selector);
+        registry.slashEquivocation(
+            result.registrationRoot,
+            result.registrations[0].signature,
+            proof,
+            0,
+            result.signedDelegation,
+            signedDelegationWithDifferentMetadata // Same delegation except for metadata
         );
     }
 

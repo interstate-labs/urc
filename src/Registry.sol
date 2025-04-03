@@ -471,13 +471,6 @@ contract Registry is IRegistry {
         // Burn the slashed amount
         _burnETH(slashAmountWei);
 
-        // Add searcher compensation
-        uint256 searcherReward = MIN_COLLATERAL / 2; // Or other appropriate amount
-        (bool success,) = msg.sender.call{ value: searcherReward }("");
-        if (!success) {
-            revert EthTransferFailed();
-        }
-
         emit OperatorSlashed(
             SlashingType.Commitment, registrationRoot, operator.owner, msg.sender, slasher, slashAmountWei
         );

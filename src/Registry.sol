@@ -187,6 +187,11 @@ contract Registry is IRegistry {
     function optOutOfSlasher(bytes32 registrationRoot, address slasher) external {
         Operator storage operator = registrations[registrationRoot];
 
+        // Prevent reusing a deleted operator
+        if (operator.deleted) {
+            revert OperatorDeleted();
+        }
+
         // Only the authorized owner can opt out
         if (operator.owner != msg.sender) {
             revert WrongOperator();
@@ -241,13 +246,17 @@ contract Registry is IRegistry {
         address owner = operator.owner;
         uint256 collateralWei = operator.collateralWei;
 
+        // Prevent reusing a deleted operator
+        if (operator.deleted) {
+            revert OperatorDeleted();
+        }
+
         // Can only slash registrations within the fraud proof window
         if (block.number > operator.registeredAt + FRAUD_PROOF_WINDOW) {
             revert FraudProofWindowExpired();
         }
 
         // Verify the registration is part of the registry
-
         uint256 verifiedCollateralGwei =
             _verifyMerkleProof(registrationRoot, keccak256(abi.encode(reg, owner)), proof, leafIndex);
 
@@ -267,12 +276,10 @@ contract Registry is IRegistry {
         // Calculate the reward amount for the challenger
         uint256 challengerReward = MIN_COLLATERAL;
 
-        // Delete the operator, they must re-register to continue
-        delete registrations[registrationRoot];
+        // Prevent the Operator from being reused
+        operator.deleted = true;
 
-        // Transfer to the challenger first - this ensures that even if the owner is malicious,
-        // the challenger still gets their reward
-        // Transfer to the challenger
+        // Transfer reward the challenger
         bool success;
         address challenger = msg.sender;
         assembly ("memory-safe") {
@@ -283,7 +290,7 @@ contract Registry is IRegistry {
             revert EthTransferFailed();
         }
 
-        // Burn the remaining collateral instead of returning to potentially malicious owner
+        // Burn the remaining collateral
         uint256 remainingWei = collateralWei - challengerReward;
         _burnETH(remainingWei);
 
@@ -322,6 +329,11 @@ contract Registry is IRegistry {
     ) external returns (uint256 slashAmountWei) {
         Operator storage operator = registrations[registrationRoot];
         bytes32 slashingDigest = keccak256(abi.encode(delegation, commitment, registrationRoot));
+
+        // Prevent reusing a deleted operator
+        if (operator.deleted) {
+            revert OperatorDeleted();
+        }
 
         // Prevent slashing with same inputs
         if (slashedBefore[slashingDigest]) {

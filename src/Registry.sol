@@ -673,7 +673,7 @@ contract Registry is IRegistry {
         delete registrations[registrationRoot];
 
         // Transfer collateral to owner
-        (bool success,) = operatorOwner.call{ value: collateralGwei * 1 gwei }("");
+        (bool success,) = owner.call{ value: collateralGwei * 1 gwei }("");
         if (!success) {
             revert EthTransferFailed();
         }
@@ -798,12 +798,19 @@ contract Registry is IRegistry {
     /// @dev Leaves are created by abi-encoding the `Registration` structs, then hashing with keccak256.
     /// @param regs The array of `Registration` structs to merkleize
     /// @return registrationRoot The merkle root of the registration
-    function _merkleizeRegistrations(Registration[] calldata regs) internal returns (bytes32 registrationRoot) {
+   function _merkleizeRegistrationsWithOwner(Registration[] calldata regs, address owner)
+        internal
+        pure
+        returns (bytes32 registrationRoot)
+    {
+        // Create leaves array with padding
         bytes32[] memory leaves = new bytes32[](regs.length);
+
+        // Create leaf nodes by hashing Registration structs
         for (uint256 i = 0; i < regs.length; i++) {
             leaves[i] = keccak256(abi.encode(regs[i], owner));
-            emit KeyRegistered(i, regs[i], leaves[i]);
         }
+
         registrationRoot = MerkleTree.generateTree(leaves);
     }
 

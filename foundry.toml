@@ -26,6 +26,7 @@ remappings = [
   "lib/openzeppelin-contracts/:@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
 ]
 
+
 [rpc_endpoints]
-mainnet = "${ETH_RPC_URL}"
-holesky = "${ETH_RPC_URL_HOLESKY}"
+mainnet = "https://ethereum.rpc.subquery.network/public/"
+holesky = "https://ethereum-holesky-rpc.publicnode.com/"

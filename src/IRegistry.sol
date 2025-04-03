@@ -131,6 +131,9 @@ interface IRegistry {
      *                                *
      *
      */
+    error TimestampTooOld();
+    error SlotAlreadySlashed();
+    error DustAmountNotAllowed();
     error InsufficientCollateral();
     error OperatorAlreadyRegistered();
     error InvalidRegistrationRoot();

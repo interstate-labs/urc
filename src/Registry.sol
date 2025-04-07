@@ -14,7 +14,7 @@ contract Registry is IRegistry {
     /// @notice Mapping from registration merkle roots to Operator structs
     mapping(bytes32 registrationRoot => Operator) public registrations;
 
-    /// @notice Mapping to track if a commitment slashing has occurred before with same input
+    /// @notice Mapping to track if a slashing has occurred before with same input
     mapping(bytes32 slashingDigest => bool) public slashedBefore;
 
     /// @notice Mapping to track if an equivocation slashing has occurred before with same input
@@ -218,6 +218,66 @@ contract Registry is IRegistry {
         slasherCommitment.optedOutAt = uint64(block.number);
 
         emit OperatorOptedOut(registrationRoot, slasher);
+    }
+
+    /**
+     *
+     *                                Slashing Functions                           *
+     *
+     */
+
+    /// @notice Slash an operator for submitting a fraudulent `Registration` in the register() function
+    /// @dev To save BLS verification gas costs, the URC optimistically accepts registration signatures. This function allows a challenger to slash the operator by executing the BLS verification to prove the registration is fraudulent.
+    /// @dev A successful challenge will transfer `MIN_COLLATERAL / 2` to the challenger, burn `MIN_COLLATERAL / 2`, and then allow the operator to claim their remaining collateral after `SLASH_WINDOW` blocks have elapsed from the `claimSlashedCollateral()` function.
+    /// @dev The function will revert if:
+    /// @dev - The operator has already been deleted (OperatorDeleted)
+    /// @dev - The fraud proof window has expired (FraudProofWindowExpired)
+    /// @dev - The operator has not registered (NotRegisteredKey)
+    /// @dev - The proof is invalid (FraudProofChallengeInvalid)
+    /// @dev - ETH transfer to challenger fails (EthTransferFailed)
+    /// @param registrationRoot The merkle root generated and stored from the register() function
+    /// @param reg The fraudulent Registration
+    /// @param proof The merkle proof to verify the operator's key is in the registry
+    /// @param leafIndex The index of the leaf in the merkle tree
+    /// @return slashedCollateralWei The amount of GWEI slashed
+    function slashRegistration(
+        bytes32 registrationRoot,
+        Registration calldata reg,
+        bytes32[] calldata proof,
+        uint256 leafIndex
+    ) external returns (uint256 slashedCollateralWei) {
+        Operator storage operator = registrations[registrationRoot];
+
+        // Prevent reusing a deleted operator
+        if (operator.deleted) {
+            revert OperatorDeleted();
+        }
+
+        // Operator is not liable for slashings before the fraud proof window elapses
+        if (block.number < operator.registeredAt + FRAUD_PROOF_WINDOW) {
+            revert FraudProofWindowNotMet();
+        }
+
+        // Operator is not liable for slashings after unregister and the delay has passed
+        if (
+            operator.unregisteredAt != type(uint48).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
+        ) {
+            revert OperatorAlreadyUnregistered();
+        }
+
+        // Verify the registration was signed by the operator's BLS key
+        slashedCollateralWei =
+            _verifyMerkleProof(registrationRoot, keccak256(abi.encode(reg, operator.owner)), proof, leafIndex);
+
+        // Burn half of the collateral and reward the challenger with the other half
+        _rewardAndBurn(slashedCollateralWei / 2, msg.sender);
+
+        // Mark the operator as deleted to prevent future slashings
+        operator.deleted = true;
+
+        emit OperatorSlashed(
+            SlashingType.Fraud, registrationRoot, operator.owner, msg.sender, address(0), slashedCollateralWei
+        );
     }
 
     /**
@@ -546,65 +606,7 @@ contract Registry is IRegistry {
         return slashAmountWei;
     }
 
-    /**
-     *
-     *                                Slashing Functions                           *
-     *
-     */
-
-    /// @notice Slash an operator for submitting a fraudulent `Registration` in the register() function
-    /// @dev To save BLS verification gas costs, the URC optimistically accepts registration signatures. This function allows a challenger to slash the operator by executing the BLS verification to prove the registration is fraudulent.
-    /// @dev A successful challenge will transfer `MIN_COLLATERAL / 2` to the challenger, burn `MIN_COLLATERAL / 2`, and then allow the operator to claim their remaining collateral after `SLASH_WINDOW` blocks have elapsed from the `claimSlashedCollateral()` function.
-    /// @dev The function will revert if:
-    /// @dev - The operator has already been deleted (OperatorDeleted)
-    /// @dev - The fraud proof window has expired (FraudProofWindowExpired)
-    /// @dev - The operator has not registered (NotRegisteredKey)
-    /// @dev - The proof is invalid (FraudProofChallengeInvalid)
-    /// @dev - ETH transfer to challenger fails (EthTransferFailed)
-    /// @param registrationRoot The merkle root generated and stored from the register() function
-    /// @param reg The fraudulent Registration
-    /// @param proof The merkle proof to verify the operator's key is in the registry
-    /// @param leafIndex The index of the leaf in the merkle tree
-    /// @return slashedCollateralWei The amount of GWEI slashed
-    function slashRegistration(
-        bytes32 registrationRoot,
-        Registration calldata reg,
-        bytes32[] calldata proof,
-        uint256 leafIndex
-    ) external returns (uint256 slashedCollateralWei) {
-        Operator storage operator = registrations[registrationRoot];
-
-        // Prevent reusing a deleted operator
-        if (operator.deleted) {
-            revert OperatorDeleted();
-        }
-
-        // Operator is not liable for slashings before the fraud proof window elapses
-        if (block.number < operator.registeredAt + FRAUD_PROOF_WINDOW) {
-            revert FraudProofWindowNotMet();
-        }
-
-        // Operator is not liable for slashings after unregister and the delay has passed
-        if (
-            operator.unregisteredAt != type(uint48).max && block.number > operator.unregisteredAt + UNREGISTRATION_DELAY
-        ) {
-            revert OperatorAlreadyUnregistered();
-        }
-
-        // Verify the registration was signed by the operator's BLS key
-        slashedCollateralWei =
-            _verifyMerkleProof(registrationRoot, keccak256(abi.encode(reg, operator.owner)), proof, leafIndex);
-
-        // Burn half of the collateral and reward the challenger with the other half
-        _rewardAndBurn(slashedCollateralWei / 2, msg.sender);
-
-        // Mark the operator as deleted to prevent future slashings
-        operator.deleted = true;
-
-        emit OperatorSlashed(
-            SlashingType.Fraud, registrationRoot, operator.owner, msg.sender, address(0), slashedCollateralWei
-        );
-    }
+    
 
     /**
      *

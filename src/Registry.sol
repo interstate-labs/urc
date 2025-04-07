@@ -12,10 +12,10 @@ contract Registry is IRegistry {
     using BLS for *;
 
     /// @notice Mapping from registration merkle roots to Operator structs
-    mapping(bytes32 registrationRoot => Operator) public registrations;
+    mapping(bytes32 registrationRoot => Operator) public operators;
 
     /// @notice Mapping to track if a slashing has occurred before with same input
-    mapping(bytes32 slashingDigest => bool) public slashedBefore;
+    mapping(bytes32 slashingDigest => bool) public commitmentSlashedBefore;
 
     /// @notice Mapping to track if an equivocation slashing has occurred before with same input
     mapping(bytes32 equivocationSlashingDigest => bool) public equivocationSlashedBefore;
@@ -66,17 +66,17 @@ contract Registry is IRegistry {
         }
 
         // Prevent reusing a deleted operator
-        if (registrations[registrationRoot].deleted) {
+        if (operators[registrationRoot].deleted) {
             revert OperatorDeleted();
         }
 
         // Prevent duplicates from overwriting previous registrations
-        if (registrations[registrationRoot].registeredAt != 0) {
+        if (operators[registrationRoot].registeredAt != 0) {
             revert OperatorAlreadyRegistered();
         }
 
         // Each Operator is mapped to a unique registration root
-        Operator storage newOperator = registrations[registrationRoot];
+        Operator storage newOperator = operators[registrationRoot];
         newOperator.owner = owner;
         newOperator.collateralWei = uint80(msg.value);
         newOperator.numKeys = uint16(regs.length);
@@ -102,7 +102,7 @@ contract Registry is IRegistry {
     /// @dev - The caller is not the operator's withdrawal address (WrongOperator)
     /// @param registrationRoot The merkle root generated and stored from the register() function
     function unregister(bytes32 registrationRoot) external {
-        Operator storage operator = registrations[registrationRoot];
+        Operator storage operator = operators[registrationRoot];
 
         // Prevent reusing a deleted operator
         if (operator.deleted) {
@@ -143,7 +143,7 @@ contract Registry is IRegistry {
     /// @param committer The address of the key used for commitments
 
     function optInToSlasher(bytes32 registrationRoot, address slasher, address committer) external {
-        Operator storage operator = registrations[registrationRoot];
+        Operator storage operator = operators[registrationRoot];
 
         // Prevent reusing a deleted operator
         if (operator.deleted) {
@@ -189,7 +189,7 @@ contract Registry is IRegistry {
     /// @param registrationRoot The merkle root generated and stored from the register() function
     /// @param slasher The address of the Slasher contract to opt out of
     function optOutOfSlasher(bytes32 registrationRoot, address slasher) external {
-        Operator storage operator = registrations[registrationRoot];
+        Operator storage operator = operators[registrationRoot];
 
         // Prevent reusing a deleted operator
         if (operator.deleted) {
@@ -246,7 +246,7 @@ contract Registry is IRegistry {
         bytes32[] calldata proof,
         uint256 leafIndex
     ) external returns (uint256 slashedCollateralWei) {
-        Operator storage operator = registrations[registrationRoot];
+        Operator storage operator = operators[registrationRoot];
 
         // Prevent reusing a deleted operator
         if (operator.deleted) {
@@ -309,7 +309,7 @@ contract Registry is IRegistry {
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
     ) external returns (uint256 slashAmountWei) {
-        Operator storage operator = registrations[registrationRoot];
+        Operator storage operator = operators[registrationRoot];
         bytes32 slashingDigest = keccak256(abi.encode(delegation, commitment, registrationRoot));
 
         // Prevent reusing a deleted operator
@@ -318,7 +318,7 @@ contract Registry is IRegistry {
         }
 
         // Prevent slashing with same inputs
-        if (slashedBefore[slashingDigest]) {
+        if (commitmentSlashedBefore[slashingDigest]) {
             revert SlashingAlreadyOccurred();
         }
 
@@ -339,7 +339,7 @@ contract Registry is IRegistry {
             revert SlashWindowExpired();
         }
 
-        // Verify the delegation was signed by the operator's BLS key
+        // This is a sanity check to ensure the delegation is valid
         uint256 collateralWei =
             _verifyDelegation(registrationRoot, registrationSignature, proof, leafIndex, delegation, operator.owner);
 
@@ -351,11 +351,11 @@ contract Registry is IRegistry {
 
         // Save timestamp only once to start the slash window
         if (operator.slashedAt == 0) {
-            operator.slashedAt = uint48(block.number);
+            operator.slashedAt = uint32(block.number);
         }
 
         // Prevent same slashing from occurring again
-        slashedBefore[slashingDigest] = true;
+        commitmentSlashedBefore[slashingDigest] = true;
 
         // Call the Slasher contract to slash the operator
         slashAmountWei = ISlasher(commitment.commitment.slasher).slash(
@@ -412,7 +412,7 @@ contract Registry is IRegistry {
         ISlasher.SignedCommitment calldata commitment,
         bytes calldata evidence
     ) external returns (uint256 slashAmountWei) {
-        Operator storage operator = registrations[registrationRoot];
+        Operator storage operator = operators[registrationRoot];
         address slasher = commitment.commitment.slasher;
 
         // Prevent reusing a deleted operator
@@ -451,9 +451,9 @@ contract Registry is IRegistry {
             revert UnauthorizedCommitment();
         }
 
-        // Save timestamp only once to start the slash window
+        // Save timestamp only once to start the slash window - MOVED BEFORE EXTERNAL CALL
         if (operator.slashedAt == 0) {
-            operator.slashedAt = uint48(block.number);
+            operator.slashedAt = uint32(block.number);
         }
 
         // Instead of deleting the entire commitment, just mark it as opted out
@@ -516,7 +516,7 @@ contract Registry is IRegistry {
         ISlasher.SignedDelegation calldata delegationOne,
         ISlasher.SignedDelegation calldata delegationTwo
     ) external returns (uint256 slashAmountWei) {
-        Operator storage operator = registrations[registrationRoot];
+        Operator storage operator = operators[registrationRoot];
         bytes32 slashingDigest = keccak256(abi.encode(delegationOne, delegationTwo, registrationRoot));
 
         // Prevent reusing a deleted operator
@@ -612,7 +612,7 @@ contract Registry is IRegistry {
     /// @dev - The collateral amount overflows the `collateralGwei` field (CollateralOverflow)
     /// @param registrationRoot The merkle root generated and stored from the register() function
     function addCollateral(bytes32 registrationRoot) external payable {
-        Operator storage operator = registrations[registrationRoot];
+        Operator storage operator = operators[registrationRoot];
 
         // Prevent reusing a deleted operator
         if (operator.deleted) {
@@ -648,7 +648,7 @@ contract Registry is IRegistry {
     /// @dev The function will transfer the operator's collateral to their registered `withdrawalAddress`.
     /// @param registrationRoot The merkle root generated and stored from the register() function
     function claimCollateral(bytes32 registrationRoot) external {
-        Operator storage operator = registrations[registrationRoot];
+        Operator storage operator = operators[registrationRoot];
         address operatorOwner = operator.owner;
         uint256 collateralWei = operator.collateralWei;
 
@@ -699,7 +699,7 @@ contract Registry is IRegistry {
     /// @dev - The slash window has not passed (SlashWindowNotMet)
     /// @dev - ETH transfer to operator fails (EthTransferFailed)
     function claimSlashedCollateral(bytes32 registrationRoot) external {
-        Operator storage operator = registrations[registrationRoot];
+        Operator storage operator = operators[registrationRoot];
 
         // Prevent reusing a deleted operator
         if (operator.deleted) {
@@ -744,7 +744,7 @@ contract Registry is IRegistry {
         view
         returns (uint256 collateralWei)
     {
-        CollateralRecord[] storage records = registrations[registrationRoot].collateralHistory;
+        CollateralRecord[] storage records = operators[registrationRoot].collateralHistory;
         if (records.length == 0) {
             return 0;
         }
@@ -802,7 +802,7 @@ contract Registry is IRegistry {
         view
         returns (SlasherCommitment memory slasherCommitment)
     {
-        Operator storage operator = registrations[registrationRoot];
+        Operator storage operator = operators[registrationRoot];
         if (operator.registeredAt == 0) {
             revert NotRegisteredKey();
         }
@@ -814,7 +814,7 @@ contract Registry is IRegistry {
     /// @param slasher The address of the slasher to check
     /// @return True if the operator is opted in, false otherwise
     function isOptedIntoSlasher(bytes32 registrationRoot, address slasher) external view returns (bool) {
-        Operator storage operator = registrations[registrationRoot];
+        Operator storage operator = operators[registrationRoot];
         if (operator.registeredAt == 0) {
             revert NotRegisteredKey();
         }
@@ -836,7 +836,7 @@ contract Registry is IRegistry {
         uint256 leafIndex,
         address slasher
     ) external view returns (SlasherCommitment memory slasherCommitment, uint256 collateralWei) {
-        Operator storage operator = registrations[registrationRoot];
+        Operator storage operator = operators[registrationRoot];
         slasherCommitment = operator.slasherCommitments[slasher];
 
         collateralWei = _verifyMerkleProof(registrationRoot, keccak256(abi.encode(reg)), proof, leafIndex);
@@ -884,7 +884,7 @@ contract Registry is IRegistry {
         if (!MerkleTree.verifyProofCalldata(registrationRoot, leaf, leafIndex, proof)) {
             revert InvalidMerkleProof();
         }
-        collateralWei = registrations[registrationRoot].collateralWei;
+        collateralWei = operators[registrationRoot].collateralWei;
     }
 
     /// @notice Verifies a delegation was signed by a registered operator's key

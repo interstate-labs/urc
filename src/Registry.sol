@@ -280,35 +280,26 @@ contract Registry is IRegistry {
         );
     }
 
-    /**
-     *
-     *                                Slashing Functions                           *
-     *
-     */
-
-    /**
-     * @notice Slashes an operator for breaking a commitment
-     * @dev The function verifies `proof` to first ensure the operator's BLS key is in the registry, then verifies the `signedDelegation` was signed by the same key. If the fraud proof window has passed, the URC will call the `slash()` function of the Slasher contract specified in the `signedCommitment`. The Slasher contract will determine if the operator has broken a commitment and return the amount of WEI to be slashed at the URC.
-     * @dev The function will burn `slashAmountWei`. It will also save the timestamp of the slashing to start the `SLASH_WINDOW` in case of multiple slashings.
-     * @dev If the slash amount equals the operator's collateral, the operator will be implicitly unregistered (collateral becomes zero).
-     * @dev The function will revert if:
-     * @dev - The operator has already been deleted (OperatorDeleted)
-     * @dev - The same slashing inputs have been supplied before (SlashingAlreadyOccurred)
-     * @dev - The fraud proof window has not passed (FraudProofWindowNotMet)
-     * @dev - The operator has already unregistered (OperatorAlreadyUnregistered)
-     * @dev - The slash window has expired (SlashWindowExpired)
-     * @dev - The proof is invalid (NotRegisteredKey)
-     * @dev - The signed commitment was not signed by the delegated committer (DelegationSignatureInvalid)
-     * @dev - The slash amount exceeds the operator's collateral (SlashAmountExceedsCollateral)
-     * @param registrationRoot The merkle root generated and stored from the register() function
-     * @param registrationSignature The signature from the operator's previously registered `Registration`
-     * @param proof The merkle proof to verify the operator's key is in the registry
-     * @param leafIndex The index of the leaf in the merkle tree
-     * @param delegation The SignedDelegation signed by the operator's BLS key
-     * @param commitment The SignedCommitment signed by the delegate's ECDSA key
-     * @param evidence Arbitrary evidence to slash the operator, required by the Slasher contract
-     * @return slashAmountWei The amount of WEI slashed
-     */
+    /// @notice Slashes an operator for breaking a commitment
+    /// @dev The function verifies `proof` to first ensure the operator's BLS key is in the registry, then verifies the `signedDelegation` was signed by the same key. If the fraud proof window has passed, the URC will call the `slash()` function of the Slasher contract specified in the `signedCommitment`. The Slasher contract will determine if the operator has broken a commitment and return the amount of GWEI to be slashed at the URC.
+    /// @dev The function will burn `slashAmountGwei`. It will also save the timestamp of the slashing to start the `SLASH_WINDOW` in case of multiple slashings.
+    /// @dev The function will revert if:
+    /// @dev - The operator has already been deleted (OperatorDeleted)
+    /// @dev - The same slashing inputs have been supplied before (SlashingAlreadyOccurred)
+    /// @dev - The fraud proof window has not passed (FraudProofWindowNotMet)
+    /// @dev - The operator has already unregistered (OperatorAlreadyUnregistered)
+    /// @dev - The slash window has expired (SlashWindowExpired)
+    /// @dev - The proof is invalid (NotRegisteredKey)
+    /// @dev - The signed commitment was not signed by the delegated committer (DelegationSignatureInvalid)
+    /// @dev - The slash amount exceeds the operator's collateral (SlashAmountExceedsCollateral)
+    /// @param registrationRoot The merkle root generated and stored from the register() function
+    /// @param registrationSignature The signature from the operator's previously registered `Registration`
+    /// @param proof The merkle proof to verify the operator's key is in the registry
+    /// @param leafIndex The index of the leaf in the merkle tree
+    /// @param delegation The SignedDelegation signed by the operator's BLS key
+    /// @param commitment The SignedCommitment signed by the delegate's ECDSA key
+    /// @param evidence Arbitrary evidence to slash the operator, required by the Slasher contract
+    /// @return slashAmountWei The amount of WEI slashed
     function slashCommitment(
         bytes32 registrationRoot,
         BLS.G2Point calldata registrationSignature,

@@ -15,7 +15,7 @@ contract Registry is IRegistry {
     mapping(bytes32 registrationRoot => Operator) public registrations;
 
     /// @notice Mapping to track if a commitment slashing has occurred before with same input
-    mapping(bytes32 commitmentSlashingDigest => bool) public slashedBefore;
+    mapping(bytes32 slashingDigest => bool) public slashedBefore;
 
     /// @notice Mapping to track if an equivocation slashing has occurred before with same input
     mapping(bytes32 equivocationSlashingDigest => bool) public equivocationSlashedBefore;
@@ -546,7 +546,7 @@ contract Registry is IRegistry {
         return slashAmountWei;
     }
 
-     /**
+    /**
      *
      *                                Slashing Functions                           *
      *

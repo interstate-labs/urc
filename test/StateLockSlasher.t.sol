@@ -5,7 +5,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import { console } from "forge-std/Test.sol";
 
-import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import { ECDSA } from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 
 import { RLPReader } from "../slashing/lib/rlp/RLPReader.sol";
 import { RLPWriter } from "../slashing/lib/rlp/RLPWriter.sol";

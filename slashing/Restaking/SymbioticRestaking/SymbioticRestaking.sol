@@ -1,24 +1,25 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.25;
+pragma solidity 0.8.29;
 
-import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
-import {EnumerableMap} from "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
-import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
+import {Time} from "lib/karak/node_modules/@openzeppelin/contracts/utils/types/Time.sol";
+import {EnumerableMap} from "lib/openzeppelin-contracts/contracts/utils/structs/EnumerableMap.sol";
+import {EnumerableSet} from "lib/openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
+import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {OwnableUpgradeable} from "lib/karak/node_modules/@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {UUPSUpgradeable} from "lib/openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol";
 
-import {IBaseDelegator} from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
-import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
-import {IVault} from "@symbiotic/interfaces/vault/IVault.sol";
-import {IRegistry} from "@symbiotic/interfaces/common/IRegistry.sol";
-import {IOptInService} from "@symbiotic/interfaces/service/IOptInService.sol";
-import {ISlasher} from "@symbiotic/interfaces/slasher/ISlasher.sol";
-import {IVetoSlasher} from "@symbiotic/interfaces/slasher/IVetoSlasher.sol";
-import {IEntity} from "@symbiotic/interfaces/common/IEntity.sol";
+import {IBaseDelegator} from "lib/core/src/interfaces/delegator/IBaseDelegator.sol";
+import {Subnetwork} from "lib/core/src/contracts/libraries/Subnetwork.sol";
+import {IVault} from "lib/core/src/interfaces/vault/IVault.sol";
+import {IRegistry} from "lib/core/src/interfaces/common/IRegistry.sol";
+import {IOptInService} from "lib/core/src/interfaces/service/IOptInService.sol";
+import {ISlasher} from "lib/core/src/interfaces/slasher/ISlasher.sol";
+import {IVetoSlasher} from "lib/core/src/interfaces/slasher/IVetoSlasher.sol";
+import {IEntity} from "lib/core/src/interfaces/common/IEntity.sol";
 
-import {IConsensusRestaking} from "../interfaces/IRestaking.sol";
-import {IParameters} from "../interfaces/IParameters.sol";
+import {IConsensusRestaking} from "../IRestaking.sol";
+import {IConsensusRestaking} from "../IRestaking.sol";
+import {IParameters} from "../IParameters.sol";
 import {MapWithTimeData} from "../library/MapWithTimeData.sol";
 
 contract SymbioticRestaking is

@@ -3,8 +3,8 @@ pragma solidity >=0.8.0 <0.9.0;
 
 // Adapted from https://github.com/chainbound/bolt/tree/unstable/bolt-contracts
 
-import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {EnumerableSet} from "openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
+import {ECDSA} from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 
 import {MerkleTrie} from "./lib/trie/MerkleTrie.sol";
 import {SecureMerkleTrie} from "./lib/trie/SecureMerkleTrie.sol";

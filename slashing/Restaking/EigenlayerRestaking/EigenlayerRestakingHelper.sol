@@ -1,16 +1,22 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.25;
+pragma solidity 0.8.29;
 
 // import {IValidatorRegistrySystem} from "../interfaces/IRegistry.sol";
-import {IParameters} from "../interfaces/IParameters.sol";
-import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {IAVSDirectory} from "@eigenlayer/src/contracts/interfaces/IAVSDirectory.sol";
-import {IDelegationManager} from "@eigenlayer/src/contracts/interfaces/IDelegationManager.sol";
-import {DelegationManagerStorage} from "@eigenlayer/src/contracts/core/DelegationManagerStorage.sol";
-import {IStrategy} from "@eigenlayer/src/contracts/interfaces/IStrategy.sol";
-import {StrategyManagerStorage} from "@eigenlayer/src/contracts/core/StrategyManagerStorage.sol";
-import {ISignatureUtils} from "@eigenlayer/src/contracts/interfaces/ISignatureUtils.sol";
+import {IParameters} from "../IParameters.sol";
+import {Time} from "lib/karak/node_modules/@openzeppelin/contracts/utils/types/Time.sol";
+import {OwnableUpgradeable} from "lib/karak/node_modules/@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+
+// Import our simplified interfaces
+// Using EigenLayer interface directly
+// Using EigenLayer interface directly
+
+// Import interfaces using direct paths
+import {IAVSDirectory} from "../../../lib/eigenlayer-contracts/src/contracts/interfaces/IAVSDirectory.sol";
+import {IDelegationManager} from "../../../lib/eigenlayer-contracts/src/contracts/interfaces/IDelegationManager.sol";
+import {DelegationManagerStorage} from "../../../lib/eigenlayer-contracts/src/contracts/core/DelegationManagerStorage.sol";
+import {StrategyManagerStorage} from "../../../lib/eigenlayer-contracts/src/contracts/core/StrategyManagerStorage.sol";
+import {IStrategy} from "../../../lib/eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
+import {ISignatureUtils} from "../../../lib/eigenlayer-contracts/src/contracts/interfaces/ISignatureUtils.sol";
 
 contract RestakingHelper is OwnableUpgradeable {
     uint48 public START_TIMESTAMP;

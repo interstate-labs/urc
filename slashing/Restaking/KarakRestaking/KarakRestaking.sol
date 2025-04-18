@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.29;
 
-import {IDSS} from "@karak/src/interfaces/IDSS.sol";
-import {ICore} from "@karak/src/interfaces/ICore.sol";
-import {Operator} from "@karak/src/entities/Operator.sol";
+import {IDSS} from "../../../lib/karak/src/interfaces/IDSS.sol";
+import {ICore} from "../../../lib/karak/src/interfaces/ICore.sol";
+import {Operator} from "../../../lib/karak/src/entities/Operator.sol";
 
 
 
@@ -18,35 +18,35 @@ contract TxnVerifier is IDSS {
     // Store verified transactions
     // mapping(bytes32 => uint256) public verifiedTxns;
       mapping(string => mapping(bytes32 => uint256)) public verifiedTxns;
-      mapping(address operatorAddress => bool exists) operatorExists;
+      mapping(address operatorAddress => bool exists) private _operatorExists;
     
     mapping(bytes32 => bool) public taskCompleted;
     // Aggregator address
     address public aggregator;
     address public owner;
-    ICore core;
+    ICore private _core;
     
 
     struct OperatorResponse {
-        bool is_included;
-        uint64 proposer_index;
-        string block_number;    
+        bool isIncluded;
+        uint64 proposerIndex;
+        string blockNumber;    
     }
     
 
     struct Task {
         string pubkey;
-        string transaction_hash;
-        string block_number;
+        string transactionHash;
+        string blockNumber;
     }
     
     // State variables to store txnValid and proposer
-    bool private txnValid;
-    uint256 private proposer;
+    bool private _txnValid;
+    uint256 private _proposer;
     
     // Added missing mapping
     mapping(bytes32 => OperatorResponse) public taskResponses;
-     address[] operatorAddresses;
+    address[] private _operatorAddresses;
     
     /* ======= Modifiers ======= */
     modifier onlyAggregator() {
@@ -60,7 +60,7 @@ contract TxnVerifier is IDSS {
     }
 
        modifier onlyCore() {
-        require(msg.sender == address(core), "Not Core");
+        require(msg.sender == address(_core), "Not Core");
         _;
     }
 
@@ -70,10 +70,10 @@ contract TxnVerifier is IDSS {
 
     }
     
-    constructor(address _aggregator, ICore _core,address _owner) {
+    constructor(address _aggregator, ICore core_, address _owner) {
         aggregator = _aggregator;
-        core = _core;
-        owner=_owner
+        _core = core_;
+        owner = _owner;
     }
     
     /* ======= External Functions ======= */
@@ -137,7 +137,7 @@ contract TxnVerifier is IDSS {
     }
 
      function isOperatorRegistered(address operator) external view returns (bool) {
-        return operatorExists[operator];
+        return _operatorExists[operator];
     }
 
     
@@ -151,31 +151,32 @@ contract TxnVerifier is IDSS {
     }
     
     function registerToCore(uint256 slashablePercentage) onlyOwner external {
-        core.registerDSS(slashablePercentage);
+        _core.registerDSS(slashablePercentage);
     }
     
-  function registrationHook(address operator, bytes memory extraData) external  onlyCore senderIsOperator(operator) {
+  function registrationHook(address operator, bytes memory extraData) external override onlyCore senderIsOperator(operator) {
         extraData = extraData;
-        if (operatorExists[operator]) revert OperatorAlreadyRegistered();
-        operatorAddresses.push(operator);
-        operatorExists[operator] = true;
+        if (_operatorExists[operator]) revert OperatorAlreadyRegistered();
+        _operatorAddresses.push(operator);
+        _operatorExists[operator] = true;
     }
 
 
     
-    function unregistrationHook(address operator) external onlyCore senderIsOperator(operator) {
-    uint256 operatorAddressesLength = operatorAddresses.length;
-    for (uint256 i = 0; i < operatorAddressesLength; i++) {
-        if (operatorAddresses[i] == operator) {
-            // Swap and pop pattern to remove the operator
-            operatorAddresses[i] = operatorAddresses[operatorAddressesLength - 1];
-            operatorAddresses.pop();
-            break;
+    function unregistrationHook(address operator, bytes memory extraData) external override onlyCore senderIsOperator(operator) {
+        extraData = extraData;
+        uint256 operatorAddressesLength = _operatorAddresses.length;
+        for (uint256 i = 0; i < operatorAddressesLength; i++) {
+            if (_operatorAddresses[i] == operator) {
+                // Swap and pop pattern to remove the operator
+                _operatorAddresses[i] = _operatorAddresses[operatorAddressesLength - 1];
+                _operatorAddresses.pop();
+                break;
+            }
         }
-    }
-    
-    // Update the mapping regardless of whether operator was found
-    operatorExists[operator] = false;
+        
+        // Update the mapping regardless of whether operator was found
+        _operatorExists[operator] = false;
     }
 
     

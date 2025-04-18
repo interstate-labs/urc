@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.25;
+pragma solidity 0.8.29;
 
-import {EnumerableMap as OEnumerableMap} from "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
-import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {EnumerableMap as OEnumerableMap} from "openzeppelin-contracts/contracts/utils/structs/EnumerableMap.sol";
+import {EnumerableSet} from "openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
-import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
+import {UUPSUpgradeable} from "lib/openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 import {MapWithTimeData} from "../library/MapWithTimeData.sol";
 
-import {IConsensusRestaking} from "../interfaces/IRestaking.sol";
+import {IConsensusRestaking} from "../IRestaking.sol";
 
-import {IServiceManager} from "@eigenlayer-middleware/src/interfaces/IServiceManager.sol";
-import {IStrategyManager} from "@eigenlayer/src/contracts/interfaces/IStrategyManager.sol";
+import {IServiceManager} from "../../../lib/eigenlayer-middleware/src/interfaces/IServiceManager.sol";
+import {IStrategyManager} from "../../../lib/eigenlayer-contracts/src/contracts/interfaces/IStrategyManager.sol";
 
-import {ISignatureUtils} from "@eigenlayer/src/contracts/interfaces/ISignatureUtils.sol";
-import {IStrategy} from "@eigenlayer/src/contracts/interfaces/IStrategy.sol";
-import {AVSDirectoryStorage} from "@eigenlayer/src/contracts/core/AVSDirectoryStorage.sol";
+import {ISignatureUtils} from "../../../lib/eigenlayer-contracts/src/contracts/interfaces/ISignatureUtils.sol";
+import {IStrategy} from "../../../lib/eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
+import {AVSDirectoryStorage} from "../../../lib/eigenlayer-contracts/src/contracts/core/AVSDirectoryStorage.sol";
 
 import "./EigenlayerRestakingHelper.sol";
 
@@ -29,7 +29,7 @@ contract EigenlayerRestaking is IConsensusRestaking, UUPSUpgradeable, OwnableUpg
 
     uint256[41] private __gap;
 
-function initialize(
+    function initialize(
         address _owner,
         address _parameters,
         address _eigenlayerAVSDirectory,
@@ -51,7 +51,6 @@ function initialize(
             _eigenlayerStrategyManager
         );
     }
-
 
     function _authorizeUpgrade(
         address newImplementation
@@ -89,7 +88,7 @@ function initialize(
     }
   
   
-        function registerOperator(
+    function registerOperator(
         string calldata rpc,
          string calldata rpc1,
           string calldata rpc2,
@@ -287,9 +286,8 @@ function initialize(
         return address(restakingHelper._avsDirector());
     }
 
- function deregisterOperatorFromAVS(address operator) public {
- 
-       restakingHelper.deregisterOperatorFromAVS(operator);
- }
+    function deregisterOperatorFromAVS(address operator) public {
+        restakingHelper.deregisterOperatorFromAVS(operator);
+    }
 
 }

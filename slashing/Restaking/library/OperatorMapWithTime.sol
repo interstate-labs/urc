@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.25;
+pragma solidity 0.8.29;
 
-import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
-import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
+import {Checkpoints} from "openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol";
+import {Time} from "openzeppelin-contracts/contracts/utils/types/Time.sol";
 
 import {EnumerableMap} from "./EnumerableMap.sol";
 
